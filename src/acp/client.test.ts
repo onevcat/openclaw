@@ -113,6 +113,29 @@ describe("resolveAcpClientSpawnEnv", () => {
     expect(env.OPENAI_API_KEY).toBeUndefined();
   });
 
+  it("injects agent and session markers when explicit context is provided", () => {
+    const env = resolveAcpClientSpawnEnv(
+      { PATH: "/usr/bin" },
+      { agentId: "agent1", sessionKey: "agent:agent2:acp:session-1" },
+    );
+
+    expect(env.OPENCLAW_SHELL).toBe("acp-client");
+    expect(env.OPENCLAW_AGENT_ID).toBe("agent1");
+    expect(env.OPENCLAW_SESSION_KEY).toBe("agent:agent2:acp:session-1");
+    expect(env.PATH).toBe("/usr/bin");
+  });
+
+  it("derives agent id from session key when only session context is provided", () => {
+    const env = resolveAcpClientSpawnEnv(
+      { PATH: "/usr/bin" },
+      { sessionKey: "agent:agent2:acp:session-1" },
+    );
+
+    expect(env.OPENCLAW_SHELL).toBe("acp-client");
+    expect(env.OPENCLAW_AGENT_ID).toBe("agent2");
+    expect(env.OPENCLAW_SESSION_KEY).toBe("agent:agent2:acp:session-1");
+  });
+
   it("strips provider auth env vars for the default OpenClaw bridge", () => {
     const stripKeys = new Set(["OPENAI_API_KEY", "GITHUB_TOKEN", "HF_TOKEN"]);
     const env = resolveAcpClientSpawnEnv(
