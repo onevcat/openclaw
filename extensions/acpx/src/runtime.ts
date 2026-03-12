@@ -42,6 +42,20 @@ import {
   type AcpxJsonObject,
 } from "./runtime-internals/shared.js";
 
+function toOpenClawAgentId(value?: string): string | undefined {
+  const trimmed = asTrimmedString(value);
+  if (!trimmed) {
+    return undefined;
+  }
+  if (trimmed === "default" || trimmed === "onevclaw") {
+    return "main";
+  }
+  if (trimmed === "main" || trimmed === "onevpaw" || trimmed === "onevtail") {
+    return trimmed;
+  }
+  return undefined;
+}
+
 export const ACPX_BACKEND_ID = "acpx";
 
 const ACPX_RUNTIME_HANDLE_PREFIX = "acpx:v1:";
@@ -219,6 +233,8 @@ export class AcpxRuntime implements AcpRuntime {
       args: ensureCommand,
       cwd,
       fallbackCode: "ACP_SESSION_INIT_FAILED",
+      agent,
+      sessionKey: input.sessionKey,
     });
     let ensuredEvent = events.find(
       (event) =>
@@ -237,6 +253,8 @@ export class AcpxRuntime implements AcpRuntime {
         args: newCommand,
         cwd,
         fallbackCode: "ACP_SESSION_INIT_FAILED",
+        agent,
+        sessionKey: input.sessionKey,
       });
       ensuredEvent = events.find(
         (event) =>
@@ -312,6 +330,7 @@ export class AcpxRuntime implements AcpRuntime {
         args,
         cwd: state.cwd,
         stripProviderAuthEnvVars: this.config.stripProviderAuthEnvVars,
+        env: this.resolveRuntimeEnv(state.agent, input.handle.sessionKey),
       },
       this.spawnCommandOptions,
     );
@@ -423,6 +442,8 @@ export class AcpxRuntime implements AcpRuntime {
       fallbackCode: "ACP_TURN_FAILED",
       ignoreNoSession: true,
       signal: input.signal,
+      agent: state.agent,
+      sessionKey: input.handle.sessionKey,
     });
     const detail = events.find((event) => !toAcpxErrorEvent(event)) ?? events[0];
     if (!detail) {
@@ -467,6 +488,8 @@ export class AcpxRuntime implements AcpRuntime {
       args,
       cwd: state.cwd,
       fallbackCode: "ACP_TURN_FAILED",
+      agent: state.agent,
+      sessionKey: input.handle.sessionKey,
     });
   }
 
@@ -490,6 +513,8 @@ export class AcpxRuntime implements AcpRuntime {
       args,
       cwd: state.cwd,
       fallbackCode: "ACP_TURN_FAILED",
+      agent: state.agent,
+      sessionKey: input.handle.sessionKey,
     });
   }
 
@@ -588,6 +613,8 @@ export class AcpxRuntime implements AcpRuntime {
       cwd: state.cwd,
       fallbackCode: "ACP_TURN_FAILED",
       ignoreNoSession: true,
+      agent: state.agent,
+      sessionKey: input.handle.sessionKey,
     });
   }
 
@@ -603,6 +630,8 @@ export class AcpxRuntime implements AcpRuntime {
       cwd: state.cwd,
       fallbackCode: "ACP_TURN_FAILED",
       ignoreNoSession: true,
+      agent: state.agent,
+      sessionKey: input.handle.sessionKey,
     });
   }
 
@@ -699,12 +728,44 @@ export class AcpxRuntime implements AcpRuntime {
     return resolved;
   }
 
+  private resolveRuntimeEnv(agent?: string, sessionKey?: string): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    const resolvedSessionKey = asTrimmedString(sessionKey);
+
+    // ACP binding session key format observed in production:
+    // agent:<backendAgent>:acp:binding:<channel>:<accountId>:<hash>
+    // For OPENCLAW_AGENT_ID we want the OpenClaw agent identity (owner/account side),
+    // not backend provider id like claude/codex.
+    const acpBindingMatch = resolvedSessionKey?.match(/^agent:[^:]+:acp:binding:[^:]+:([^:]+):/);
+    const fromBindingAccount = toOpenClawAgentId(asTrimmedString(acpBindingMatch?.[1]));
+    const fromSessionKey = resolvedSessionKey
+      ? toOpenClawAgentId(asTrimmedString(deriveAgentFromSessionKey(resolvedSessionKey, "")))
+      : undefined;
+    const fromAgentParam = toOpenClawAgentId(agent);
+
+    const resolvedAgent = fromBindingAccount || fromSessionKey || fromAgentParam;
+
+    if (resolvedAgent) {
+      env.OPENCLAW_AGENT_ID = resolvedAgent;
+    } else {
+      delete env.OPENCLAW_AGENT_ID;
+    }
+    if (resolvedSessionKey) {
+      env.OPENCLAW_SESSION_KEY = resolvedSessionKey;
+    } else {
+      delete env.OPENCLAW_SESSION_KEY;
+    }
+    return env;
+  }
+
   private async runControlCommand(params: {
     args: string[];
     cwd: string;
     fallbackCode: AcpRuntimeErrorCode;
     ignoreNoSession?: boolean;
     signal?: AbortSignal;
+    agent?: string;
+    sessionKey?: string;
   }): Promise<AcpxJsonObject[]> {
     const result = await spawnAndCollect(
       {
@@ -712,6 +773,7 @@ export class AcpxRuntime implements AcpRuntime {
         args: params.args,
         cwd: params.cwd,
         stripProviderAuthEnvVars: this.config.stripProviderAuthEnvVars,
+        env: this.resolveRuntimeEnv(params.agent, params.sessionKey),
       },
       this.spawnCommandOptions,
       {

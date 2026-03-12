@@ -204,6 +204,8 @@ if (command === "prompt") {
     sessionName: sessionFromOption,
     stdinText,
     openclawShell,
+    openclawAgentId: process.env.OPENCLAW_AGENT_ID || "",
+    openclawSessionKey: process.env.OPENCLAW_SESSION_KEY || "",
     openaiApiKey: process.env.OPENAI_API_KEY || "",
     githubToken: process.env.GITHUB_TOKEN || "",
   });

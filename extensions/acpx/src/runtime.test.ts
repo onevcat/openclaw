@@ -121,11 +121,43 @@ describe("AcpxRuntime", () => {
     expect(ensure).toBeDefined();
     expect(prompt).toBeDefined();
     expect(prompt?.openclawShell).toBe("acp");
+    expect(prompt?.openclawAgentId).toBe("");
+    expect(prompt?.openclawSessionKey).toBe("agent:codex:acp:123");
     expect(Array.isArray(prompt?.args)).toBe(true);
     const promptArgs = (prompt?.args as string[]) ?? [];
     expect(promptArgs).toContain("--ttl");
     expect(promptArgs).toContain("180");
     expect(promptArgs).toContain("--approve-all");
+  });
+
+  it("maps binding session account IDs to OpenClaw agent IDs in ACP env markers", async () => {
+    const { runtime, logPath } = await createMockRuntimeFixture();
+
+    const handle = await runtime.ensureSession({
+      sessionKey: "agent:codex:acp:binding:discord:default:abc123",
+      agent: "codex",
+      mode: "persistent",
+    });
+
+    for await (const _event of runtime.runTurn({
+      handle,
+      text: "binding-env",
+      mode: "prompt",
+      requestId: "req-binding-env",
+    })) {
+      // drain
+    }
+
+    const logs = await readMockRuntimeLogEntries(logPath);
+    const prompt = logs.find(
+      (entry) =>
+        entry.kind === "prompt" &&
+        String(entry.sessionName ?? "") === "agent:codex:acp:binding:discord:default:abc123",
+    );
+    expect(prompt).toBeDefined();
+    expect(prompt?.openclawShell).toBe("acp");
+    expect(prompt?.openclawAgentId).toBe("main");
+    expect(prompt?.openclawSessionKey).toBe("agent:codex:acp:binding:discord:default:abc123");
   });
 
   it("uses sessions new with --resume-session when resumeSessionId is provided", async () => {
