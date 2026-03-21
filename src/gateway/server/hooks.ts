@@ -7,6 +7,7 @@ import type { CronJob } from "../../cron/types.js";
 import { requestHeartbeatNow } from "../../infra/heartbeat-wake.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
 import type { createSubsystemLogger } from "../../logging/subsystem.js";
+import { buildHookCallbackPayload, sendHookCallback } from "../hook-callback.js";
 import { type HookAgentDispatchPayload, type HooksConfigResolved } from "../hooks.js";
 import { createHooksRequestHandler, type HookClientIpConfig } from "../server-http.js";
 
@@ -85,6 +86,21 @@ export function createGatewayHooksRequestHandler(params: {
           lane: "cron",
           deliveryContract: "shared",
         });
+        if (value.callback) {
+          await sendHookCallback({
+            callback: value.callback,
+            payload: buildHookCallbackPayload({
+              callbackBody: value.callback.body,
+              runId,
+              hookName: value.name,
+              agentId: value.agentId,
+              sessionKey,
+              result,
+            }),
+            log: (message) => logHooks.warn(message),
+          });
+        }
+
         const summary = result.summary?.trim() || result.error?.trim() || result.status;
         const prefix =
           result.status === "ok" ? `Hook ${value.name}` : `Hook ${value.name} (${result.status})`;
