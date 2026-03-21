@@ -33,6 +33,15 @@ export function buildHookCallbackPayload(params: {
   };
 }
 
+function toSafeLogUrl(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return "<invalid-url>";
+  }
+}
+
 export async function sendHookCallback(params: {
   callback: HookAgentCallbackConfig;
   payload: Record<string, unknown>;
@@ -53,10 +62,12 @@ export async function sendHookCallback(params: {
     });
 
     if (!response.ok) {
-      params.log(`hook callback failed: status=${response.status} url=${params.callback.url}`);
+      params.log(
+        `hook callback failed: status=${response.status} url=${toSafeLogUrl(params.callback.url)}`,
+      );
     }
   } catch (err) {
-    params.log(`hook callback error: ${String(err)} url=${params.callback.url}`);
+    params.log(`hook callback error: ${String(err)} url=${toSafeLogUrl(params.callback.url)}`);
   } finally {
     clearTimeout(timer);
   }

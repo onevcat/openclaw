@@ -1,6 +1,7 @@
 // Gateway webhook helpers for external hook dispatch into agents and wake flows.
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
+import { isIP } from "node:net";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
@@ -289,6 +290,24 @@ function resolveOptionalHookIdempotencyKey(raw: unknown): string | undefined {
   return trimmed;
 }
 
+function isLoopbackHost(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  if (lower === "localhost") {
+    return true;
+  }
+  if (lower === "::1") {
+    return true;
+  }
+  const kind = isIP(lower);
+  if (kind === 4) {
+    return lower.startsWith("127.");
+  }
+  if (kind === 6) {
+    return lower === "::1";
+  }
+  return false;
+}
+
 /** Resolve the hook idempotency key from headers or payload within length limits. */
 export function resolveHookIdempotencyKey(params: {
   payload: Record<string, unknown>;
@@ -480,10 +499,24 @@ export function normalizeAgentPayload(payload: Record<string, unknown>):
     if (!callbackUrl) {
       return { ok: false, error: "callback.url required" };
     }
+    let parsedCallbackUrl: URL;
     try {
-      new URL(callbackUrl);
+      parsedCallbackUrl = new URL(callbackUrl);
     } catch {
       return { ok: false, error: "callback.url invalid" };
+    }
+    if (parsedCallbackUrl.username || parsedCallbackUrl.password) {
+      return { ok: false, error: "callback.url must not include credentials" };
+    }
+    const protocol = parsedCallbackUrl.protocol.toLowerCase();
+    if (
+      protocol !== "https:" &&
+      !(protocol === "http:" && isLoopbackHost(parsedCallbackUrl.hostname))
+    ) {
+      return {
+        ok: false,
+        error: "callback.url must be https (or http on loopback host)",
+      };
     }
     const callbackToken =
       typeof callbackObj.token === "string" && callbackObj.token.trim()

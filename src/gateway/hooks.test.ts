@@ -210,6 +210,38 @@ describe("gateway hooks helpers", () => {
     }
   });
 
+  test("normalizeAgentPayload validates callback url security", () => {
+    const httpsOk = normalizeAgentPayload({
+      message: "hello",
+      callback: { url: "https://callback.example/agent" },
+    });
+    expect(httpsOk.ok).toBe(true);
+
+    const loopbackHttpOk = normalizeAgentPayload({
+      message: "hello",
+      callback: { url: "http://127.0.0.1:8788/callback" },
+    });
+    expect(loopbackHttpOk.ok).toBe(true);
+
+    const plainHttpExternal = normalizeAgentPayload({
+      message: "hello",
+      callback: { url: "http://callback.example/agent" },
+    });
+    expect(plainHttpExternal).toEqual({
+      ok: false,
+      error: "callback.url must be https (or http on loopback host)",
+    });
+
+    const withCredentials = normalizeAgentPayload({
+      message: "hello",
+      callback: { url: "https://user:pass@callback.example/agent" },
+    });
+    expect(withCredentials).toEqual({
+      ok: false,
+      error: "callback.url must not include credentials",
+    });
+  });
+
   test("resolveHookTargetAgentId preserves omitted default target intent", () => {
     const cfg = {
       hooks: { enabled: true, token: "secret" },
