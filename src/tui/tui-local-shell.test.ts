@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import { resolveOpenClawRuntimeEnv } from "../runtime/openclaw-env.js";
 import { createLocalShellRunner } from "./tui-local-shell.js";
 
 const createSelector = () => {
@@ -15,6 +16,8 @@ const createSelector = () => {
 function createShellHarness(params?: {
   spawnCommand?: typeof import("node:child_process").spawn;
   env?: Record<string, string>;
+  agentId?: string;
+  sessionKey?: string;
 }) {
   const messages: string[] = [];
   const chatLog = {
@@ -39,6 +42,8 @@ function createShellHarness(params?: {
     createSelector: createSelectorSpy,
     spawnCommand,
     ...(params?.env ? { env: params.env } : {}),
+    ...(params?.agentId ? { agentId: params.agentId } : {}),
+    ...(params?.sessionKey ? { sessionKey: params.sessionKey } : {}),
   });
   return {
     messages,
@@ -49,6 +54,24 @@ function createShellHarness(params?: {
     getLastSelector: () => lastSelector,
   };
 }
+
+describe("resolveTuiLocalRuntimeEnv", () => {
+  it("injects agent and session markers when context is provided", () => {
+    const env = {
+      PATH: "/tmp/bin",
+      ...resolveOpenClawRuntimeEnv({
+        shell: "tui-local",
+        agentId: "agent1",
+        sessionKey: "agent:agent2:main",
+      }),
+    };
+
+    expect(env.OPENCLAW_SHELL).toBe("tui-local");
+    expect(env.OPENCLAW_AGENT_ID).toBe("agent1");
+    expect(env.OPENCLAW_SESSION_KEY).toBe("agent:agent2:main");
+    expect(env.PATH).toBe("/tmp/bin");
+  });
+});
 
 describe("createLocalShellRunner", () => {
   it("logs denial on subsequent ! attempts without re-prompting", async () => {
@@ -86,6 +109,7 @@ describe("createLocalShellRunner", () => {
     const harness = createShellHarness({
       spawnCommand: spawnCommand as unknown as typeof import("node:child_process").spawn,
       env: { PATH: "/tmp/bin", USER: "dev" },
+      sessionKey: "agent:agent2:main",
     });
 
     const firstRun = harness.runLocalShellLine("!echo hi");
@@ -98,6 +122,8 @@ describe("createLocalShellRunner", () => {
     expect(spawnCommand).toHaveBeenCalledTimes(1);
     const spawnOptions = spawnCommand.mock.calls[0]?.[1] as { env?: Record<string, string> };
     expect(spawnOptions.env?.OPENCLAW_SHELL).toBe("tui-local");
+    expect(spawnOptions.env?.OPENCLAW_AGENT_ID).toBe("agent2");
+    expect(spawnOptions.env?.OPENCLAW_SESSION_KEY).toBe("agent:agent2:main");
     expect(spawnOptions.env?.PATH).toBe("/tmp/bin");
     expect(harness.messages).toContain("local shell: enabled for this session");
   });
