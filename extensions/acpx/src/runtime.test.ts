@@ -186,6 +186,7 @@ describe("AcpxRuntime", () => {
     expect(ensure).toBeDefined();
     expect(prompt).toBeDefined();
     expect(prompt?.openclawShell).toBe("acp");
+    expect(prompt?.openclawSessionKey).toBe("agent:codex:acp:123");
     expect(Array.isArray(prompt?.args)).toBe(true);
     const promptArgs = (prompt?.args as string[]) ?? [];
     expect(promptArgs).toContain("--ttl");
@@ -681,9 +682,10 @@ describe("AcpxRuntime", () => {
 
   it("exposes control capabilities and runs set-mode/set/status commands", async () => {
     const { runtime, logPath } = await createMockRuntimeFixture();
+    const sessionKey = "agent:claude:acp:binding:discord:onevpaw:controls";
     const handle = await runtime.ensureSession({
-      sessionKey: "agent:codex:acp:controls",
-      agent: "codex",
+      sessionKey,
+      agent: "claude",
       mode: "persistent",
     });
 
@@ -702,7 +704,7 @@ describe("AcpxRuntime", () => {
       value: "openai-codex/gpt-5.4",
     });
     const status = await runtime.getStatus({ handle });
-    const ensuredSessionName = "agent:codex:acp:controls";
+    const ensuredSessionName = sessionKey;
 
     expect(status.summary).toContain("status=alive");
     expect(status.acpxRecordId).toBe("rec-" + ensuredSessionName);
@@ -713,9 +715,23 @@ describe("AcpxRuntime", () => {
     expect(status.details?.pid).toBe(4242);
 
     const logs = await readMockRuntimeLogEntries(logPath);
-    expect(logs.find((entry) => entry.kind === "set-mode")?.mode).toBe("plan");
-    expect(logs.find((entry) => entry.kind === "set")?.key).toBe("model");
-    expect(logs.find((entry) => entry.kind === "status")).toBeDefined();
+    const ensure = logs.find((entry) => entry.kind === "ensure");
+    const setMode = logs.find((entry) => entry.kind === "set-mode");
+    const set = logs.find((entry) => entry.kind === "set");
+    const statusEntry = logs.find((entry) => entry.kind === "status");
+
+    expect(setMode?.mode).toBe("plan");
+    expect(set?.key).toBe("model");
+    expect(statusEntry).toBeDefined();
+
+    expect(ensure?.openclawAgentId).toBe("onevpaw");
+    expect(ensure?.openclawSessionKey).toBe(sessionKey);
+    expect(setMode?.openclawAgentId).toBe("onevpaw");
+    expect(setMode?.openclawSessionKey).toBe(sessionKey);
+    expect(set?.openclawAgentId).toBe("onevpaw");
+    expect(set?.openclawSessionKey).toBe(sessionKey);
+    expect(statusEntry?.openclawAgentId).toBe("onevpaw");
+    expect(statusEntry?.openclawSessionKey).toBe(sessionKey);
   });
 
   it("surfaces signal-only status exits as control command failures", async () => {

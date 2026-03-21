@@ -43,6 +43,20 @@ import {
   type AcpxJsonObject,
 } from "./runtime-internals/shared.js";
 
+function toOpenClawAgentId(value?: string): string | undefined {
+  const trimmed = asTrimmedString(value);
+  if (!trimmed) {
+    return undefined;
+  }
+  if (trimmed === "default" || trimmed === "onevclaw") {
+    return "main";
+  }
+  if (trimmed === "main" || trimmed === "onevpaw" || trimmed === "onevtail") {
+    return trimmed;
+  }
+  return undefined;
+}
+
 export const ACPX_BACKEND_ID = "acpx";
 
 const ACPX_RUNTIME_HANDLE_PREFIX = "acpx:v1:";
@@ -705,6 +719,7 @@ export class AcpxRuntime implements AcpRuntime {
         args,
         cwd: state.cwd,
         stripProviderAuthEnvVars: this.config.stripProviderAuthEnvVars,
+        env: this.resolveRuntimeEnv(state.agent, input.handle.sessionKey),
       },
       this.spawnCommandOptions,
     );
@@ -1092,6 +1107,48 @@ export class AcpxRuntime implements AcpRuntime {
     return resolved;
   }
 
+  private getControlArgValue(args: string[], name: string): string | undefined {
+    const index = args.indexOf(name);
+    if (index < 0 || index + 1 >= args.length) {
+      return undefined;
+    }
+    return asTrimmedString(args[index + 1]);
+  }
+
+  private resolveSessionKeyFromControlArgs(args: string[]): string | undefined {
+    return this.getControlArgValue(args, "--session") ?? this.getControlArgValue(args, "--name");
+  }
+
+  private resolveAgentFromControlArgs(args: string[]): string | undefined {
+    return this.getControlArgValue(args, "--agent");
+  }
+
+  private resolveRuntimeEnv(agent?: string, sessionKey?: string): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    const resolvedSessionKey = asTrimmedString(sessionKey);
+
+    const acpBindingMatch = resolvedSessionKey?.match(/^agent:[^:]+:acp:binding:[^:]+:([^:]+):/);
+    const fromBindingAccount = toOpenClawAgentId(asTrimmedString(acpBindingMatch?.[1]));
+    const fromSessionKey = resolvedSessionKey
+      ? toOpenClawAgentId(asTrimmedString(deriveAgentFromSessionKey(resolvedSessionKey, "")))
+      : undefined;
+    const fromAgentParam = toOpenClawAgentId(agent);
+
+    const resolvedAgent = fromBindingAccount || fromSessionKey || fromAgentParam;
+
+    if (resolvedAgent) {
+      env.OPENCLAW_AGENT_ID = resolvedAgent;
+    } else {
+      delete env.OPENCLAW_AGENT_ID;
+    }
+    if (resolvedSessionKey) {
+      env.OPENCLAW_SESSION_KEY = resolvedSessionKey;
+    } else {
+      delete env.OPENCLAW_SESSION_KEY;
+    }
+    return env;
+  }
+
   private async runControlCommand(params: {
     args: string[];
     cwd: string;
@@ -1105,6 +1162,10 @@ export class AcpxRuntime implements AcpRuntime {
         args: params.args,
         cwd: params.cwd,
         stripProviderAuthEnvVars: this.config.stripProviderAuthEnvVars,
+        env: this.resolveRuntimeEnv(
+          this.resolveAgentFromControlArgs(params.args),
+          this.resolveSessionKeyFromControlArgs(params.args),
+        ),
       },
       this.spawnCommandOptions,
       {

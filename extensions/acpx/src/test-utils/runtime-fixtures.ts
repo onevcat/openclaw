@@ -24,9 +24,19 @@ const fs = require("node:fs");
 const args = process.argv.slice(2);
 const logPath = process.env.MOCK_ACPX_LOG;
 const openclawShell = process.env.OPENCLAW_SHELL || "";
+const openclawAgentId = process.env.OPENCLAW_AGENT_ID || "";
+const openclawSessionKey = process.env.OPENCLAW_SESSION_KEY || "";
 const writeLog = (entry) => {
   if (!logPath) return;
-  fs.appendFileSync(logPath, JSON.stringify(entry) + "\n");
+  fs.appendFileSync(
+    logPath,
+    JSON.stringify({
+      ...entry,
+      openclawShell,
+      openclawAgentId,
+      openclawSessionKey,
+    }) + "\n",
+  );
 };
 const emitJson = (payload) => process.stdout.write(JSON.stringify(payload) + "\n");
 const flushAndExit = (code) => process.stdout.write("", () => process.exit(code));
@@ -246,7 +256,6 @@ if (command === "prompt") {
     args,
     sessionName: sessionFromOption,
     stdinText,
-    openclawShell,
     openaiApiKey: process.env.OPENAI_API_KEY || "",
     githubToken: process.env.GITHUB_TOKEN || "",
   });
