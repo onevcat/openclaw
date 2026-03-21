@@ -213,6 +213,7 @@ export function spawnWithResolvedCommand(
     args: string[];
     cwd: string;
     stripProviderAuthEnvVars?: boolean;
+    env?: NodeJS.ProcessEnv;
   },
   options?: SpawnCommandOptions,
 ): ChildProcessWithoutNullStreams {
@@ -225,7 +226,7 @@ export function spawnWithResolvedCommand(
   );
 
   const childEnv = omitEnvKeysCaseInsensitive(
-    process.env,
+    params.env ?? process.env,
     params.stripProviderAuthEnvVars ? listKnownProviderAuthEnvVarNames() : [],
   );
   childEnv.OPENCLAW_SHELL = "acp";
@@ -275,6 +276,7 @@ export async function spawnAndCollect(
     args: string[];
     cwd: string;
     stripProviderAuthEnvVars?: boolean;
+    env?: NodeJS.ProcessEnv;
   },
   options?: SpawnCommandOptions,
   runtime?: {
