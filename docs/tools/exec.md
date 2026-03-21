@@ -44,9 +44,10 @@ Notes:
 - Host execution (`gateway`/`node`) rejects `env.PATH` and loader overrides (`LD_*`/`DYLD_*`) to
   prevent binary hijacking or injected code.
 - OpenClaw sets `OPENCLAW_SHELL=exec` in the spawned command environment (including PTY and sandbox execution) so shell/profile rules can detect exec-tool context.
-- Important: sandboxing is **off by default**. If sandboxing is off, implicit `host=auto`
-  resolves to `gateway`. Explicit `host=sandbox` still fails closed instead of silently
-  running on the gateway host. Enable sandboxing or use `host=gateway` with approvals.
+- OpenClaw also injects `OPENCLAW_AGENT_ID` for exec child processes and, when available, `OPENCLAW_SESSION_KEY` so downstream scripts can make deterministic routing decisions without parsing prompts or persona text.
+- Important: sandboxing is **off by default**. If sandboxing is off, implicit `host=auto` resolves to `gateway`.
+  Explicit `host=sandbox` still fails closed instead of silently running on the gateway host.
+  Enable sandboxing or use `host=gateway` with approvals.
 - Script preflight checks (for common Python/Node shell-syntax mistakes) only inspect files inside the
   effective `workdir` boundary. If a script path resolves outside `workdir`, preflight is skipped for
   that file.

@@ -36,6 +36,7 @@ Behavior:
   to confirm completion.
 - Do not emulate reminders or delayed follow-ups with `sleep` loops or repeated
   polling; use cron for future work.
+- When the exec turn is tied to an agent session, spawned child processes also receive `OPENCLAW_AGENT_ID` and `OPENCLAW_SESSION_KEY`.
 
 ## Child process bridging
 

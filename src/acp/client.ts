@@ -17,6 +17,7 @@ import {
   materializeWindowsSpawnProgram,
   resolveWindowsSpawnProgram,
 } from "../plugin-sdk/windows-spawn.js";
+import { resolveOpenClawRuntimeEnv } from "../runtime/openclaw-env.js";
 import {
   listKnownProviderAuthEnvVarNames,
   omitEnvKeysCaseInsensitive,
@@ -169,6 +170,8 @@ export type AcpClientOptions = {
   serverArgs?: string[];
   serverVerbose?: boolean;
   verbose?: boolean;
+  agentId?: string;
+  sessionKey?: string;
 };
 
 export type AcpClientHandle = {
@@ -198,10 +201,20 @@ type AcpClientSpawnEnvOptions = {
 
 export function resolveAcpClientSpawnEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
-  options: AcpClientSpawnEnvOptions = {},
+  options: AcpClientSpawnEnvOptions & {
+    agentId?: string;
+    sessionKey?: string;
+  } = {},
 ): NodeJS.ProcessEnv {
   const env = omitEnvKeysCaseInsensitive(baseEnv, options.stripKeys ?? []);
-  env.OPENCLAW_SHELL = "acp-client";
+  Object.assign(
+    env,
+    resolveOpenClawRuntimeEnv({
+      shell: "acp-client",
+      agentId: options.agentId,
+      sessionKey: options.sessionKey,
+    }),
+  );
   return env;
 }
 
@@ -352,7 +365,11 @@ export async function createAcpClient(opts: AcpClientOptions = {}): Promise<AcpC
     stripProviderAuthEnvVars,
     activeSkillEnvKeys: getActiveSkillEnvKeys(),
   });
-  const spawnEnv = resolveAcpClientSpawnEnv(process.env, { stripKeys });
+  const spawnEnv = resolveAcpClientSpawnEnv(process.env, {
+    stripKeys,
+    agentId: opts.agentId,
+    sessionKey: opts.sessionKey,
+  });
   const spawnInvocation = resolveAcpClientSpawnInvocation(
     { serverCommand, serverArgs: effectiveArgs },
     {
