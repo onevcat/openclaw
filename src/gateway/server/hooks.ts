@@ -9,12 +9,82 @@ import { enqueueSystemEvent } from "../../infra/system-events.js";
 import type { createSubsystemLogger } from "../../logging/subsystem.js";
 import {
   normalizeHookDispatchSessionKey,
+  type HookAgentCallbackConfig,
   type HookAgentDispatchPayload,
   type HooksConfigResolved,
 } from "../hooks.js";
 import { createHooksRequestHandler } from "../server-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
+
+async function notifyHookCallback(params: {
+  callback: HookAgentCallbackConfig;
+  payload: Record<string, unknown>;
+  logHooks: SubsystemLogger;
+}) {
+  const timeoutMs = Math.max(1, (params.callback.timeoutSeconds ?? 10) * 1_000);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(params.callback.url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(params.callback.token ? { "x-meowhook-callback-token": params.callback.token } : {}),
+      },
+      body: JSON.stringify(params.payload),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      params.logHooks.warn(
+        `hook callback failed: status=${response.status} url=${params.callback.url}`,
+      );
+    }
+  } catch (err) {
+    params.logHooks.warn(`hook callback error: ${String(err)} url=${params.callback.url}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function buildHookCallbackPayload(params: {
+  callbackBody?: Record<string, unknown>;
+  runId: string;
+  hookName: string;
+  agentId?: string;
+  sessionKey: string;
+  result:
+    | {
+        status: string;
+        summary?: string;
+        error?: string;
+        delivered?: boolean;
+        deliveryAttempted?: boolean;
+      }
+    | {
+        status: "error";
+        summary?: string;
+        error?: string;
+      };
+}) {
+  const base = params.callbackBody ? { ...params.callbackBody } : {};
+  return {
+    ...base,
+    ok: params.result.status === "ok",
+    status: params.result.status,
+    error: params.result.error,
+    summary: params.result.summary,
+    runId: params.runId,
+    hook: params.hookName,
+    ...(params.agentId ? { agent: params.agentId } : {}),
+    sessionKey: params.sessionKey,
+    delivered: "delivered" in params.result ? params.result.delivered : undefined,
+    deliveryAttempted:
+      "deliveryAttempted" in params.result ? params.result.deliveryAttempted : undefined,
+    timestamp: new Date().toISOString(),
+  };
+}
 
 export function createGatewayHooksRequestHandler(params: {
   deps: CliDeps;
@@ -78,6 +148,22 @@ export function createGatewayHooksRequestHandler(params: {
           lane: "cron",
           deliveryContract: "shared",
         });
+
+        if (value.callback) {
+          await notifyHookCallback({
+            callback: value.callback,
+            payload: buildHookCallbackPayload({
+              callbackBody: value.callback.body,
+              runId,
+              hookName: value.name,
+              agentId: value.agentId,
+              sessionKey,
+              result,
+            }),
+            logHooks,
+          });
+        }
+
         const summary = result.summary?.trim() || result.error?.trim() || result.status;
         const prefix =
           result.status === "ok" ? `Hook ${value.name}` : `Hook ${value.name} (${result.status})`;
@@ -90,8 +176,29 @@ export function createGatewayHooksRequestHandler(params: {
           }
         }
       } catch (err) {
-        logHooks.warn(`hook agent failed: ${String(err)}`);
-        enqueueSystemEvent(`Hook ${value.name} (error): ${String(err)}`, {
+        const errorText = String(err);
+        logHooks.warn(`hook agent failed: ${errorText}`);
+
+        if (value.callback) {
+          await notifyHookCallback({
+            callback: value.callback,
+            payload: buildHookCallbackPayload({
+              callbackBody: value.callback.body,
+              runId,
+              hookName: value.name,
+              agentId: value.agentId,
+              sessionKey,
+              result: {
+                status: "error",
+                error: errorText,
+                summary: errorText,
+              },
+            }),
+            logHooks,
+          });
+        }
+
+        enqueueSystemEvent(`Hook ${value.name} (error): ${errorText}`, {
           sessionKey: mainSessionKey,
         });
         if (value.wakeMode === "now") {

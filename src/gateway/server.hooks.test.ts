@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { resolveMainSessionKeyFromConfig } from "../config/sessions.js";
 import { drainSystemEvents, peekSystemEvents } from "../infra/system-events.js";
 import {
@@ -163,6 +163,58 @@ describe("gateway server hooks", () => {
 
       const resBadJson = await postHook(port, "/hooks/wake", "{");
       expect(resBadJson.status).toBe(400);
+    });
+  });
+
+  test("sends platform callback after /hooks/agent run completes", async () => {
+    testState.hooksConfig = { enabled: true, token: HOOK_TOKEN };
+    setMainAndHooksAgents();
+
+    const originalFetch = globalThis.fetch;
+    const callbackCalls: Array<{ url: string; body: Record<string, unknown> }> = [];
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (input: URL | RequestInfo, init?: RequestInit) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url === "https://callback.example/agent") {
+          const bodyText = typeof init?.body === "string" ? init.body : "{}";
+          callbackCalls.push({ url, body: JSON.parse(bodyText) as Record<string, unknown> });
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return originalFetch(input as RequestInfo, init);
+      },
+    );
+
+    await withGatewayServer(async ({ port }) => {
+      mockIsolatedRunOkOnce();
+
+      const response = await postHook(port, "/hooks/agent", {
+        message: "Do it",
+        name: "Email",
+        callback: {
+          url: "https://callback.example/agent",
+          token: "token-1",
+          body: {
+            traceId: "trace-1",
+            agent: "hooks",
+          },
+        },
+      });
+
+      expect(response.status).toBe(200);
+      await waitForSystemEvent();
+      expect(callbackCalls.length).toBe(1);
+      expect(callbackCalls[0]?.body).toMatchObject({
+        traceId: "trace-1",
+        agent: "hooks",
+        ok: true,
+        status: "ok",
+      });
+      drainSystemEvents(resolveMainKey());
     });
   });
 
