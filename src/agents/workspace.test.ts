@@ -251,6 +251,62 @@ describe("loadWorkspaceBootstrapFiles", () => {
     expect(getMemoryEntries(files)).toHaveLength(0);
   });
 
+  it("loads bootstrap symlink targets from sibling workspace for profile workspaces", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-workspace-profile-link-"));
+    try {
+      const sharedWorkspaceDir = path.join(rootDir, "workspace");
+      const profileWorkspaceDir = path.join(rootDir, "workspace-onevtail");
+      await fs.mkdir(sharedWorkspaceDir, { recursive: true });
+      await fs.mkdir(profileWorkspaceDir, { recursive: true });
+
+      await fs.writeFile(path.join(sharedWorkspaceDir, DEFAULT_AGENTS_FILENAME), "shared", "utf-8");
+      await fs.symlink(
+        path.join("..", "workspace", DEFAULT_AGENTS_FILENAME),
+        path.join(profileWorkspaceDir, DEFAULT_AGENTS_FILENAME),
+      );
+
+      const files = await loadWorkspaceBootstrapFiles(profileWorkspaceDir);
+      const agents = files.find((file) => file.name === DEFAULT_AGENTS_FILENAME);
+      expect(agents?.missing).toBe(false);
+      expect(agents?.content).toBe("shared");
+    } finally {
+      await fs.rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps profile-workspace bootstrap symlinks outside sibling workspace blocked", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const rootDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "openclaw-workspace-profile-boundary-"),
+    );
+    try {
+      const sharedWorkspaceDir = path.join(rootDir, "workspace");
+      const profileWorkspaceDir = path.join(rootDir, "workspace-onevtail");
+      const outsideDir = path.join(rootDir, "outside");
+      await fs.mkdir(sharedWorkspaceDir, { recursive: true });
+      await fs.mkdir(profileWorkspaceDir, { recursive: true });
+      await fs.mkdir(outsideDir, { recursive: true });
+
+      await fs.writeFile(path.join(outsideDir, DEFAULT_AGENTS_FILENAME), "outside", "utf-8");
+      await fs.symlink(
+        path.join("..", "outside", DEFAULT_AGENTS_FILENAME),
+        path.join(profileWorkspaceDir, DEFAULT_AGENTS_FILENAME),
+      );
+
+      const files = await loadWorkspaceBootstrapFiles(profileWorkspaceDir);
+      const agents = files.find((file) => file.name === DEFAULT_AGENTS_FILENAME);
+      expect(agents?.missing).toBe(true);
+      expect(agents?.content).toBeUndefined();
+    } finally {
+      await fs.rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
   it("treats hardlinked bootstrap aliases as missing", async () => {
     if (process.platform === "win32") {
       return;
