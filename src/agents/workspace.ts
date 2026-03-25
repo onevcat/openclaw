@@ -54,16 +54,62 @@ function workspaceFileIdentity(stat: syncFs.Stats, canonicalPath: string): strin
   return `${canonicalPath}|${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
 }
 
+function resolveProfileWorkspaceSharedRoot(workspaceDir: string): string | null {
+  const resolvedWorkspaceDir = resolveUserPath(workspaceDir);
+  const baseName = path.basename(resolvedWorkspaceDir);
+  if (!/^workspace-[^/]+$/u.test(baseName)) {
+    return null;
+  }
+  const sharedWorkspaceDir = path.resolve(resolvedWorkspaceDir, "..", "workspace");
+  if (sharedWorkspaceDir === resolvedWorkspaceDir) {
+    return null;
+  }
+  return sharedWorkspaceDir;
+}
+
+function buildBootstrapBoundaryRoots(params: {
+  workspaceDir: string;
+  additionalBoundaryRoots?: string[];
+}): string[] {
+  const roots = [params.workspaceDir, ...(params.additionalBoundaryRoots ?? [])]
+    .map((candidate) => resolveUserPath(candidate))
+    .filter((candidate) => candidate.length > 0);
+  return Array.from(new Set(roots));
+}
+
 async function readWorkspaceFileWithGuards(params: {
   filePath: string;
   workspaceDir: string;
+  additionalBoundaryRoots?: string[];
 }): Promise<WorkspaceGuardedReadResult> {
-  const opened = await openBoundaryFile({
+  const boundaryRoots = buildBootstrapBoundaryRoots({
+    workspaceDir: params.workspaceDir,
+    additionalBoundaryRoots: params.additionalBoundaryRoots,
+  });
+
+  const [primaryRoot, ...fallbackRoots] = boundaryRoots;
+  let opened = await openBoundaryFile({
     absolutePath: params.filePath,
-    rootPath: params.workspaceDir,
+    rootPath: primaryRoot,
     boundaryLabel: "workspace root",
     maxBytes: MAX_WORKSPACE_BOOTSTRAP_FILE_BYTES,
   });
+
+  if (!opened.ok && opened.reason === "validation") {
+    for (const fallbackRoot of fallbackRoots) {
+      const fallback = await openBoundaryFile({
+        absolutePath: params.filePath,
+        rootPath: fallbackRoot,
+        boundaryLabel: "workspace root",
+        maxBytes: MAX_WORKSPACE_BOOTSTRAP_FILE_BYTES,
+      });
+      if (fallback.ok) {
+        opened = fallback;
+        break;
+      }
+    }
+  }
+
   if (!opened.ok) {
     workspaceFileCache.delete(params.filePath);
     return opened;
@@ -524,11 +570,17 @@ export async function loadWorkspaceBootstrapFiles(dir: string): Promise<Workspac
     entries.push(memoryEntry);
   }
 
+  // Profile workspaces (`workspace-<profile>`) can intentionally symlink bootstrap
+  // files back to the primary `workspace` directory.
+  const sharedWorkspaceRoot = resolveProfileWorkspaceSharedRoot(resolvedDir);
+  const additionalBoundaryRoots = sharedWorkspaceRoot ? [sharedWorkspaceRoot] : [];
+
   const result: WorkspaceBootstrapFile[] = [];
   for (const entry of entries) {
     const loaded = await readWorkspaceFileWithGuards({
       filePath: entry.filePath,
       workspaceDir: resolvedDir,
+      additionalBoundaryRoots,
     });
     if (loaded.ok) {
       result.push({
