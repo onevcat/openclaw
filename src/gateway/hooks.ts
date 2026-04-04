@@ -207,12 +207,15 @@ export type HookAgentCallbackConfig = {
   timeoutSeconds?: number;
 };
 
+export type HookAgentSessionMode = "isolated" | "sticky";
+
 export type HookAgentPayload = {
   message: string;
   name: string;
   agentId?: string;
   idempotencyKey?: string;
   wakeMode: "now" | "next-heartbeat";
+  sessionMode: HookAgentSessionMode;
   sessionKey?: string;
   deliver: boolean;
   channel: HookMessageChannel;
@@ -395,6 +398,8 @@ export function normalizeAgentPayload(payload: Record<string, unknown>):
   const agentId = normalizeOptionalString(agentIdRaw);
   const idempotencyKey = resolveOptionalHookIdempotencyKey(payload.idempotencyKey);
   const wakeMode = payload.wakeMode === "next-heartbeat" ? "next-heartbeat" : "now";
+  const sessionMode: HookAgentSessionMode =
+    payload.sessionMode === "sticky" ? "sticky" : "isolated";
   const sessionKeyRaw = payload.sessionKey;
   const sessionKey = normalizeOptionalString(sessionKeyRaw);
   const channel = resolveHookChannel(payload.channel);
@@ -481,6 +486,7 @@ export function normalizeAgentPayload(payload: Record<string, unknown>):
       agentId,
       idempotencyKey,
       wakeMode,
+      sessionMode,
       sessionKey,
       deliver,
       channel,
