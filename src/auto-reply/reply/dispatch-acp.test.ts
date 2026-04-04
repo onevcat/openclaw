@@ -107,6 +107,8 @@ async function runDispatch(params: {
   cfg?: OpenClawConfig;
   dispatcher?: ReplyDispatcher;
   shouldRouteToOriginating?: boolean;
+  originatingChannel?: string;
+  originatingTo?: string;
   onReplyStart?: () => void;
   ctxOverrides?: Record<string, unknown>;
   sessionKeyOverride?: string;
@@ -126,7 +128,10 @@ async function runDispatch(params: {
     inboundAudio: false,
     shouldRouteToOriginating: params.shouldRouteToOriginating ?? false,
     ...(params.shouldRouteToOriginating
-      ? { originatingChannel: "telegram", originatingTo: "telegram:thread-1" }
+      ? {
+          originatingChannel: params.originatingChannel ?? "telegram",
+          originatingTo: params.originatingTo ?? "telegram:thread-1",
+        }
       : {}),
     shouldSendToolSummaries: true,
     bypassForCommand: false,
@@ -811,7 +816,7 @@ describe("tryDispatchAcpReply", () => {
     );
   });
 
-  it("does not deliver final fallback text when routed block text was already visible", async () => {
+  it("does not deliver final fallback text when routed telegram block text was already visible", async () => {
     setReadyAcpResolution();
     ttsMocks.resolveTtsConfig.mockReturnValue({ mode: "final" });
     queueTtsReplies({ text: "CODEX_OK" }, {} as ReturnType<typeof ttsMocks.maybeApplyTtsToPayload>);
@@ -822,7 +827,34 @@ describe("tryDispatchAcpReply", () => {
     expect(routeMocks.routeReply).toHaveBeenCalledTimes(1);
   });
 
-  it("does not deliver final fallback text when direct block text was already visible", async () => {
+  it("does not deliver final fallback text when routed discord block text was already visible", async () => {
+    setReadyAcpResolution();
+    ttsMocks.resolveTtsConfig.mockReturnValue({ mode: "final" });
+    queueTtsReplies({ text: "CODEX_OK" }, {} as ReturnType<typeof ttsMocks.maybeApplyTtsToPayload>);
+    mockRoutedTextTurn("CODEX_OK");
+
+    const { dispatcher } = createDispatcher();
+    const result = await runDispatch({
+      bodyForAgent: "run acp",
+      dispatcher,
+      shouldRouteToOriginating: true,
+      originatingChannel: "discord",
+      originatingTo: "channel:1480165432601350164",
+    });
+
+    expect(result?.counts.block).toBe(1);
+    expect(result?.counts.final).toBe(0);
+    expect(routeMocks.routeReply).toHaveBeenCalledTimes(1);
+    expect(routeMocks.routeReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "discord",
+        to: "channel:1480165432601350164",
+        payload: expect.objectContaining({ text: "CODEX_OK" }),
+      }),
+    );
+  });
+
+  it("does not deliver final fallback text when direct telegram block text was already visible", async () => {
     setReadyAcpResolution();
     ttsMocks.resolveTtsConfig.mockReturnValue({ mode: "final" });
     queueTtsReplies({ text: "CODEX_OK" }, {} as ReturnType<typeof ttsMocks.maybeApplyTtsToPayload>);
@@ -835,6 +867,32 @@ describe("tryDispatchAcpReply", () => {
       ctxOverrides: {
         Provider: "telegram",
         Surface: "telegram",
+      },
+    });
+
+    expect(result?.counts.block).toBe(0);
+    expect(result?.counts.final).toBe(0);
+    expect(counts.block).toBe(0);
+    expect(counts.final).toBe(0);
+    expect(dispatcher.sendBlockReply).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "CODEX_OK" }),
+    );
+    expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
+  });
+
+  it("does not deliver final fallback text when direct discord block text was already visible", async () => {
+    setReadyAcpResolution();
+    ttsMocks.resolveTtsConfig.mockReturnValue({ mode: "final" });
+    queueTtsReplies({ text: "CODEX_OK" }, {} as ReturnType<typeof ttsMocks.maybeApplyTtsToPayload>);
+    mockVisibleTextTurn("CODEX_OK");
+
+    const { dispatcher, counts } = createDispatcher();
+    const result = await runDispatch({
+      bodyForAgent: "reply",
+      dispatcher,
+      ctxOverrides: {
+        Provider: "discord",
+        Surface: "discord",
       },
     });
 
@@ -871,7 +929,7 @@ describe("tryDispatchAcpReply", () => {
     expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
   });
 
-  it("preserves final fallback when direct block text is filtered by non-telegram channels", async () => {
+  it("preserves final fallback when direct block text is filtered by other non-telegram channels", async () => {
     setReadyAcpResolution();
     ttsMocks.resolveTtsConfig.mockReturnValue({ mode: "final" });
     queueTtsReplies({ text: "CODEX_OK" }, {} as ReturnType<typeof ttsMocks.maybeApplyTtsToPayload>);
@@ -881,6 +939,10 @@ describe("tryDispatchAcpReply", () => {
     const result = await runDispatch({
       bodyForAgent: "reply",
       dispatcher,
+      ctxOverrides: {
+        Provider: "signal",
+        Surface: "signal",
+      },
     });
 
     expect(result?.counts.block).toBe(0);

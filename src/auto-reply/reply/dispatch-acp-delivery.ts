@@ -39,7 +39,8 @@ function shouldTreatDeliveredTextAsVisible(params: {
   if (params.kind === "final") {
     return true;
   }
-  return normalizeDeliveryChannel(params.channel) === "telegram";
+  const normalizedChannel = normalizeDeliveryChannel(params.channel);
+  return normalizedChannel === "telegram" || normalizedChannel === "discord";
 }
 
 type AcpDispatchDeliveryState = {
