@@ -292,6 +292,32 @@ describe("gateway server hooks", () => {
     });
   });
 
+  test("supports sticky hook session mode for /hooks/agent", async () => {
+    testState.hooksConfig = {
+      enabled: true,
+      token: HOOK_TOKEN,
+      allowRequestSessionKey: true,
+      allowedSessionKeyPrefixes: ["hook:"],
+    };
+    await withGatewayServer(async ({ port }) => {
+      mockIsolatedRunOkOnce();
+      const resAgent = await postHook(port, "/hooks/agent", {
+        message: "Continue in same PR context",
+        sessionMode: "sticky",
+        sessionKey: "hook:gh:onevcat:prowl:pr:140:onevtail",
+      });
+      expect(resAgent.status).toBe(200);
+      await waitForSystemEvent();
+      const call = (cronIsolatedRun.mock.calls[0] as unknown[] | undefined)?.[0] as {
+        job?: { sessionTarget?: string };
+        sessionKey?: string;
+      };
+      expect(call?.job?.sessionTarget).toBe("session:hook");
+      expect(call?.sessionKey).toBe("hook:gh:onevcat:prowl:pr:140:onevtail");
+      drainSystemEvents(resolveMainKey());
+    });
+  });
+
   test("preserves mapped hook provenance across async dispatch", async () => {
     testState.hooksConfig = {
       enabled: true,

@@ -153,6 +153,7 @@ describe("gateway hooks helpers", () => {
       expect(ok.value.sessionKey).toBeUndefined();
       expect(ok.value.channel).toBe("last");
       expect(ok.value.name).toBe("Hook");
+      expect(ok.value.sessionMode).toBe("isolated");
       expect(ok.value.deliver).toBe(true);
     }
 
@@ -207,6 +208,12 @@ describe("gateway hooks helpers", () => {
     expect(noAgent.ok).toBe(true);
     if (noAgent.ok) {
       expect(noAgent.value.agentId).toBeUndefined();
+    }
+
+    const sticky = normalizeAgentPayload({ message: "hello", sessionMode: "sticky" });
+    expect(sticky.ok).toBe(true);
+    if (sticky.ok) {
+      expect(sticky.value.sessionMode).toBe("sticky");
     }
   });
 

@@ -119,6 +119,7 @@ export function createGatewayHooksRequestHandler(params: {
     const jobId = randomUUID();
     const runId = randomUUID();
     const nowMs = resolveDateTimestampMs(Date.now());
+    const sessionTarget = value.sessionMode === "sticky" ? "session:hook" : "isolated";
     const delivery = value.deliver
       ? {
           mode: "announce" as const,
@@ -134,7 +135,7 @@ export function createGatewayHooksRequestHandler(params: {
       createdAtMs: nowMs,
       updatedAtMs: nowMs,
       schedule: { kind: "at", at: resolveTimestampMsToIsoString(nowMs) },
-      sessionTarget: "isolated",
+      sessionTarget,
       wakeMode: value.wakeMode,
       payload: {
         kind: "agentTurn",
