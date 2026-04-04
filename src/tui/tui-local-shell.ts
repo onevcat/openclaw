@@ -34,9 +34,11 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
   const spawnCommand = deps.spawnCommand ?? spawn;
   const getCwd = deps.getCwd ?? (() => process.cwd());
   const env = deps.env ?? process.env;
-  const getAgentId = typeof deps.agentId === "function" ? deps.agentId : () => deps.agentId;
+  const resolvedAgentId = typeof deps.agentId === "function" ? undefined : deps.agentId;
+  const resolvedSessionKey = typeof deps.sessionKey === "function" ? undefined : deps.sessionKey;
+  const getAgentId = typeof deps.agentId === "function" ? deps.agentId : () => resolvedAgentId;
   const getSessionKey =
-    typeof deps.sessionKey === "function" ? deps.sessionKey : () => deps.sessionKey;
+    typeof deps.sessionKey === "function" ? deps.sessionKey : () => resolvedSessionKey;
   const maxChars = deps.maxOutputChars ?? 40_000;
 
   const ensureLocalExecAllowed = async (): Promise<boolean> => {

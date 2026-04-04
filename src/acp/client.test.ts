@@ -117,15 +117,20 @@ describe("resolveAcpClientSpawnEnv", () => {
     expect(env.OPENAI_API_KEY).toBeUndefined();
   });
 
-  it("injects agent and session markers when explicit context is provided", () => {
+  it("injects agent/session markers and session UUID when explicit context is provided", () => {
     const env = resolveAcpClientSpawnEnv(
       { PATH: "/usr/bin" },
-      { agentId: "agent1", sessionKey: "agent:agent2:acp:session-1" },
+      {
+        agentId: "agent1",
+        sessionKey: "agent:agent2:acp:session-1",
+        sessionId: "sid-abc-123",
+      },
     );
 
     expect(env.OPENCLAW_SHELL).toBe("acp-client");
     expect(env.OPENCLAW_AGENT_ID).toBe("agent1");
     expect(env.OPENCLAW_SESSION_KEY).toBe("agent:agent2:acp:session-1");
+    expect(env.OPENCLAW_SESSION_ID).toBe("sid-abc-123");
     expect(env.PATH).toBe("/usr/bin");
   });
 

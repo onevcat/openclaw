@@ -57,7 +57,7 @@ function createShellHarness(params?: {
 
 describe("resolveTuiLocalRuntimeEnv", () => {
   it("injects agent and session markers when context is provided", () => {
-    const env = {
+    const env: Record<string, string> = {
       PATH: "/tmp/bin",
       ...resolveOpenClawRuntimeEnv({
         shell: "tui-local",
