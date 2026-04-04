@@ -1534,9 +1534,7 @@ describe("dispatchReplyFromConfig", () => {
     const streamedText = blockCalls.map((call) => (call[0] as ReplyPayload).text ?? "").join("");
     expect(streamedText).toContain("hello");
     expect(streamedText).toContain("world");
-    expect(dispatcher.sendFinalReply).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "hello world" }),
-    );
+    expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
   });
 
   it("emits lifecycle end for ACP turns using the current run id", async () => {
