@@ -82,10 +82,7 @@ async function shouldTreatDeliveredTextAsVisible(params: {
       text: params.text,
     });
   }
-  if (!params.routed) {
-    return channelId === "telegram";
-  }
-  return false;
+  return channelId === "telegram" || channelId === "discord";
 }
 
 async function maybeApplyAcpTts(params: {
