@@ -168,6 +168,7 @@ export type AcpClientOptions = {
   verbose?: boolean;
   agentId?: string;
   sessionKey?: string;
+  sessionId?: string;
 };
 
 export type AcpClientHandle = {
@@ -193,14 +194,14 @@ function buildServerArgs(opts: AcpClientOptions): string[] {
 
 type AcpClientSpawnEnvOptions = {
   stripKeys?: Iterable<string>;
+  agentId?: string;
+  sessionKey?: string;
+  sessionId?: string;
 };
 
 export function resolveAcpClientSpawnEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
-  options: AcpClientSpawnEnvOptions & {
-    agentId?: string;
-    sessionKey?: string;
-  } = {},
+  options: AcpClientSpawnEnvOptions = {},
 ): NodeJS.ProcessEnv {
   const env = omitEnvKeysCaseInsensitive(baseEnv, options.stripKeys ?? []);
   Object.assign(
@@ -209,6 +210,7 @@ export function resolveAcpClientSpawnEnv(
       shell: "acp-client",
       agentId: options.agentId,
       sessionKey: options.sessionKey,
+      sessionId: options.sessionId,
     }),
   );
   return env;
@@ -366,6 +368,7 @@ export async function createAcpClient(opts: AcpClientOptions = {}): Promise<AcpC
     stripKeys,
     agentId: opts.agentId,
     sessionKey: opts.sessionKey,
+    sessionId: opts.sessionId,
   });
   const spawnInvocation = resolveAcpClientSpawnInvocation(
     { serverCommand, serverArgs: effectiveArgs },

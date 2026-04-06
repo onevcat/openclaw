@@ -475,6 +475,7 @@ export function createExecTool(
   const notifyOnExit = defaults?.notifyOnExit !== false;
   const notifyOnExitEmptySuccess = defaults?.notifyOnExitEmptySuccess === true;
   const notifySessionKey = defaults?.sessionKey?.trim() || undefined;
+  const notifySessionId = defaults?.sessionId?.trim() || undefined;
   const approvalRunningNoticeMs = resolveApprovalRunningNoticeMs(defaults?.approvalRunningNoticeMs);
   // Derive agentId only when sessionKey is an agent session key.
   const parsedAgentSession = parseAgentSessionKey(defaults?.sessionKey);
@@ -798,6 +799,7 @@ export function createExecTool(
         scopeKey: defaults?.scopeKey,
         agentId,
         sessionKey: notifySessionKey,
+        sessionId: notifySessionId,
         timeoutSec: effectiveTimeout,
         onUpdate,
       });

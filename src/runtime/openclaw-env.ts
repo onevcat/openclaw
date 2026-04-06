@@ -3,22 +3,23 @@ import { resolveAgentIdFromSessionKey } from "../routing/session-key.js";
 /**
  * Build OpenClaw runtime environment markers for child-process spawn.
  *
- * Returns only the OpenClaw-specific env vars (`OPENCLAW_SHELL`,
- * `OPENCLAW_AGENT_ID`, `OPENCLAW_SESSION_KEY`).  Callers should spread the
- * result onto whatever base env they already have:
- *
- *     { ...baseEnv, ...resolveOpenClawRuntimeEnv({ shell: "exec", ... }) }
+ * Returns only OpenClaw-specific env vars (`OPENCLAW_SHELL`, `OPENCLAW_AGENT_ID`,
+ * `OPENCLAW_SESSION_KEY`, `OPENCLAW_SESSION_ID`). Callers should merge the result into
+ * whatever base env they already have.
  */
 export function resolveOpenClawRuntimeEnv(opts: {
   shell: string;
   agentId?: string;
   sessionKey?: string;
+  sessionId?: string;
 }): Record<string, string> {
   const sessionKey = opts.sessionKey?.trim();
+  const sessionId = opts.sessionId?.trim();
   const agentId = opts.agentId?.trim() || resolveAgentIdFromSessionKey(sessionKey);
   return {
     OPENCLAW_SHELL: opts.shell,
-    OPENCLAW_AGENT_ID: agentId,
+    ...(agentId ? { OPENCLAW_AGENT_ID: agentId } : {}),
     ...(sessionKey ? { OPENCLAW_SESSION_KEY: sessionKey } : {}),
+    ...(sessionId ? { OPENCLAW_SESSION_ID: sessionId } : {}),
   };
 }
