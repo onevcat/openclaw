@@ -539,6 +539,7 @@ export async function runExecProcess(opts: {
   scopeKey?: string;
   agentId?: string;
   sessionKey?: string;
+  sessionId?: string;
   timeoutSec: number | null;
   onUpdate?: (partialResult: AgentToolResult<ExecToolDetails>) => void;
 }): Promise<ExecProcessHandle> {
@@ -552,6 +553,7 @@ export async function runExecProcess(opts: {
       shell: "exec",
       agentId: opts.agentId,
       sessionKey: opts.sessionKey,
+      sessionId: opts.sessionId,
     }),
   };
 
