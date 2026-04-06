@@ -25,6 +25,8 @@ export type ExecToolDefaults = {
   allowBackground?: boolean;
   scopeKey?: string;
   sessionKey?: string;
+  /** Stable OpenClaw conversation UUID for this run (if available). */
+  sessionId?: string;
   messageProvider?: string;
   currentChannelId?: string;
   currentThreadTs?: string;

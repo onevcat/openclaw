@@ -1356,6 +1356,7 @@ export function createExecTool(
     accountId: defaults?.accountId,
     threadId: defaults?.currentThreadTs,
   });
+  const notifySessionId = normalizeOptionalString(defaults?.sessionId);
   const approvalRunningNoticeMs = resolveApprovalRunningNoticeMs(defaults?.approvalRunningNoticeMs);
   // Derive agentId only when sessionKey is an agent session key.
   const parsedAgentSession = parseAgentSessionKey(defaults?.sessionKey);
@@ -1706,6 +1707,7 @@ export function createExecTool(
         agentId,
         sessionKey: notifySessionKey,
         notifyDeliveryContext,
+        sessionId: notifySessionId,
         timeoutSec: effectiveTimeout,
         onUpdate,
       });
