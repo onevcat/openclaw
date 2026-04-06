@@ -10,6 +10,7 @@ import {
 } from "../infra/exec-approvals.js";
 import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
 import { isDangerousHostEnvVarName } from "../infra/host-env-security.js";
+import { resolveOpenClawRuntimeEnv } from "../infra/openclaw-exec-env.js";
 import { findPathKey, mergePathPrepend } from "../infra/path-prepend.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
 import { scopedHeartbeatWakeOptions } from "../routing/session-key.js";
@@ -540,7 +541,9 @@ export async function runExecProcess(opts: {
   notifyOnExit: boolean;
   notifyOnExitEmptySuccess?: boolean;
   scopeKey?: string;
+  agentId?: string;
   sessionKey?: string;
+  sessionId?: string;
   timeoutSec: number | null;
   onUpdate?: (partialResult: AgentToolResult<ExecToolDetails>) => void;
 }): Promise<ExecProcessHandle> {
@@ -550,7 +553,12 @@ export async function runExecProcess(opts: {
   const supervisor = getProcessSupervisor();
   const shellRuntimeEnv: Record<string, string> = {
     ...opts.env,
-    OPENCLAW_SHELL: "exec",
+    ...resolveOpenClawRuntimeEnv({
+      shell: "exec",
+      agentId: opts.agentId,
+      sessionKey: opts.sessionKey,
+      sessionId: opts.sessionId,
+    }),
   };
 
   const session: ProcessSession = {

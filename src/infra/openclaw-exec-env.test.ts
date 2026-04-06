@@ -4,6 +4,7 @@ import {
   markOpenClawExecEnv,
   OPENCLAW_CLI_ENV_VALUE,
   OPENCLAW_CLI_ENV_VAR,
+  resolveOpenClawRuntimeEnv,
 } from "./openclaw-exec-env.js";
 
 describe("markOpenClawExecEnv", () => {
@@ -17,6 +18,33 @@ describe("markOpenClawExecEnv", () => {
     });
     expect(marked).not.toBe(env);
     expect(env.OPENCLAW_CLI).toBe("0");
+  });
+});
+
+describe("resolveOpenClawRuntimeEnv", () => {
+  it("injects shell, agent, session key, and session id markers", () => {
+    expect(
+      resolveOpenClawRuntimeEnv({
+        shell: "exec",
+        agentId: "onevpaw",
+        sessionKey: "agent:onevpaw:main",
+        sessionId: "sid-123",
+      }),
+    ).toEqual({
+      OPENCLAW_SHELL: "exec",
+      OPENCLAW_AGENT_ID: "onevpaw",
+      OPENCLAW_SESSION_KEY: "agent:onevpaw:main",
+      OPENCLAW_SESSION_ID: "sid-123",
+    });
+  });
+
+  it("derives agent id from session key when agentId is omitted", () => {
+    expect(resolveOpenClawRuntimeEnv({ shell: "exec", sessionKey: "agent:onevtail:main" }))
+      .toMatchObject({
+        OPENCLAW_SHELL: "exec",
+        OPENCLAW_AGENT_ID: "onevtail",
+        OPENCLAW_SESSION_KEY: "agent:onevtail:main",
+      });
   });
 });
 
