@@ -68,11 +68,11 @@ describe("getShellConfig", () => {
     expect(shell).toBe("/usr/bin/fish");
   });
 
-  it("uses sh when SHELL is unset", () => {
+  it("uses /bin/sh when SHELL is unset", () => {
     delete process.env.SHELL;
     process.env.PATH = "";
     const { shell } = getShellConfig();
-    expect(shell).toBe("sh");
+    expect(shell).toBe("/bin/sh");
   });
 });
 

@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+const DEFAULT_POSIX_SHELL = "/bin/sh";
+
 export function resolvePowerShellPath(): string {
   // Prefer PowerShell 7 when available; PS 5.1 lacks "&&" support.
   const programFiles = process.env.ProgramFiles || process.env.PROGRAMFILES || "C:\\Program Files";
@@ -64,8 +66,17 @@ export function getShellConfig(): { shell: string; args: string[] } {
       return { shell: sh, args: ["-c"] };
     }
   }
-  const shell = envShell && envShell.length > 0 ? envShell : "sh";
+  const shell = envShell && envShell.length > 0 ? envShell : resolveDefaultPosixShell();
   return { shell, args: ["-c"] };
+}
+
+function resolveDefaultPosixShell(): string {
+  try {
+    fs.accessSync(DEFAULT_POSIX_SHELL, fs.constants.X_OK);
+    return DEFAULT_POSIX_SHELL;
+  } catch {
+    return resolveShellFromPath("sh") ?? "sh";
+  }
 }
 
 export function resolveShellFromPath(name: string): string | undefined {
