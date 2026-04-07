@@ -78,7 +78,7 @@ describe("buildHookCallbackPayload", () => {
     });
   });
 
-  it("keeps runtime errors fatal even if the terminal block says ok", () => {
+  it("prefers terminal ok over non-hard runtime errors when terminal result is required", () => {
     const payload = buildHookCallbackPayload({
       callbackBody: { requireTerminalHookResult: true },
       runId: "run-3",
@@ -90,7 +90,32 @@ describe("buildHookCallbackPayload", () => {
         outputText: [
           "Trying to recover.",
           "<openclaw_hook_result>",
-          '{"status":"ok","summary":"should not override runtime error"}',
+          '{"status":"ok","summary":"terminal success"}',
+          "</openclaw_hook_result>",
+        ].join("\n"),
+      },
+    });
+
+    expect(payload).toMatchObject({
+      ok: true,
+      status: "ok",
+      summary: "terminal success",
+      error: undefined,
+    });
+  });
+
+  it("keeps timeout/interruption runtime errors fatal even if terminal block says ok", () => {
+    const payload = buildHookCallbackPayload({
+      callbackBody: { requireTerminalHookResult: true },
+      runId: "run-4",
+      hookName: "MeowHook-GitHub-onevpaw",
+      sessionKey: "agent:onevpaw:hook:test",
+      result: {
+        status: "error",
+        error: "run timed out after 300s",
+        outputText: [
+          "<openclaw_hook_result>",
+          '{"status":"ok","summary":"terminal success"}',
           "</openclaw_hook_result>",
         ].join("\n"),
       },
@@ -99,7 +124,7 @@ describe("buildHookCallbackPayload", () => {
     expect(payload).toMatchObject({
       ok: false,
       status: "error",
-      error: "push_failed",
+      error: "run timed out after 300s",
     });
   });
 });
