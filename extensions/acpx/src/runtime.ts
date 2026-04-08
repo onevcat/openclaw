@@ -6,7 +6,6 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs/promises";
 import path, { resolve as resolvePath } from "node:path";
 import {
-  ACPX_BACKEND_ID,
   AcpxRuntime as BaseAcpxRuntime,
   createAcpRuntime,
   createAgentRegistry,
@@ -41,6 +40,8 @@ import {
   isOpenClawLeaseAwareAcpxProcessCommand,
   type AcpxProcessCleanupDeps,
 } from "./process-reaper.js";
+
+export const ACPX_BACKEND_ID = "acpx";
 
 type AcpSessionStore = AcpRuntimeOptions["sessionStore"];
 type AcpSessionRecord = Parameters<AcpSessionStore["save"]>[0];
@@ -1393,7 +1394,6 @@ export class AcpxRuntime implements AcpRuntime {
 }
 
 export {
-  ACPX_BACKEND_ID,
   createAcpRuntime,
   createAgentRegistry,
   createFileSessionStore,
