@@ -1,5 +1,4 @@
 import {
-  ACPX_BACKEND_ID,
   AcpxRuntime as BaseAcpxRuntime,
   createAcpRuntime,
   createAgentRegistry,
@@ -14,6 +13,8 @@ import {
   type AcpRuntimeStatus,
 } from "acpx/runtime";
 import type { AcpRuntime } from "../runtime-api.js";
+
+export const ACPX_BACKEND_ID = "acpx";
 
 type AcpSessionStore = AcpRuntimeOptions["sessionStore"];
 type AcpSessionRecord = Parameters<AcpSessionStore["save"]>[0];
@@ -142,7 +143,6 @@ export class AcpxRuntime implements AcpxRuntimeLike {
 }
 
 export {
-  ACPX_BACKEND_ID,
   createAcpRuntime,
   createAgentRegistry,
   createFileSessionStore,
