@@ -524,7 +524,7 @@ export async function runExecProcess(opts: {
   const sessionId = createSessionSlug();
   const execCommand = opts.execCommand ?? opts.command;
   const supervisor = getProcessSupervisor();
-  const shellRuntimeEnv: NodeJS.ProcessEnv = {
+  const shellRuntimeEnv: Record<string, string> = {
     ...opts.env,
     ...resolveOpenClawRuntimeEnv({
       shell: "exec",

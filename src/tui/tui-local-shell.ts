@@ -34,10 +34,10 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
   const spawnCommand = deps.spawnCommand ?? spawn;
   const getCwd = deps.getCwd ?? (() => process.cwd());
   const env = deps.env ?? process.env;
-  const getAgentId: () => string | undefined =
-    typeof deps.agentId === "function" ? deps.agentId : () => deps.agentId;
-  const getSessionKey: () => string | undefined =
-    typeof deps.sessionKey === "function" ? deps.sessionKey : () => deps.sessionKey;
+  const getAgentId = () =>
+    typeof deps.agentId === "function" ? deps.agentId() : deps.agentId;
+  const getSessionKey = () =>
+    typeof deps.sessionKey === "function" ? deps.sessionKey() : deps.sessionKey;
   const maxChars = deps.maxOutputChars ?? 40_000;
 
   const ensureLocalExecAllowed = async (): Promise<boolean> => {
