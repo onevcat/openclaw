@@ -698,6 +698,7 @@ export function createHooksRequestHandler(
             idempotencyKey,
             agentId: targetAgentId,
             wakeMode: mapped.action.wakeMode,
+            sessionMode: mapped.action.sessionMode === "sticky" ? "sticky" : "isolated",
             sessionKey: normalizedDispatchSessionKey,
             deliver: resolveHookDeliver(mapped.action.deliver),
             channel,
