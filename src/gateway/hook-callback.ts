@@ -92,6 +92,7 @@ export function buildHookCallbackPayload(params: {
     status: resolved.status,
     error: resolved.error,
     summary: resolved.summary,
+    outputText: params.result.outputText,
     runId: params.runId,
     hook: params.hookName,
     ...(params.agentId ? { agent: params.agentId } : {}),

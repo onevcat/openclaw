@@ -48,6 +48,12 @@ describe("buildHookCallbackPayload", () => {
       ok: true,
       status: "ok",
       summary: "Opened PR #157 and posted the issue follow-up comment.",
+      outputText: [
+        "All done.",
+        "<openclaw_hook_result>",
+        '{"status":"ok","summary":"Opened PR #157 and posted the issue follow-up comment."}',
+        "</openclaw_hook_result>",
+      ].join("\n"),
       runId: "run-1",
       hook: "MeowHook-GitHub-onevpaw",
       agent: "onevpaw",
