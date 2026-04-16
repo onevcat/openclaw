@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OC_GIT_ID="/Users/onevcat/.openclaw/bin/oc-git-id"
+
+if [[ -x "$OC_GIT_ID" ]]; then
+  "$OC_GIT_ID" normalize-message --repo . --file "$1"
+fi
