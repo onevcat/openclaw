@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OC_GIT_ID="/Users/onevcat/.openclaw/bin/oc-git-id"
+
+if [[ ! -x "$OC_GIT_ID" ]]; then
+  echo "oc-git-id is missing: $OC_GIT_ID" >&2
+  exit 1
+fi
+
+"$OC_GIT_ID" validate-current --repo . --file "$1"
