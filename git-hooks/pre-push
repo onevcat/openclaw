@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GLOBAL_PRE_PUSH="/Users/onevcat/.openclaw/git-hooks/pre-push"
+TMP_FILE="$(mktemp)"
+trap 'rm -f "$TMP_FILE"' EXIT
+cat > "$TMP_FILE"
+
+if [[ -x "$GLOBAL_PRE_PUSH" ]]; then
+  "$GLOBAL_PRE_PUSH" "$@" < "$TMP_FILE"
+fi
