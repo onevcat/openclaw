@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { delimiter, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AcpRuntime } from "../runtime-api.js";
 import { AcpxRuntime } from "./runtime.js";
@@ -238,5 +240,50 @@ describe("AcpxRuntime fresh reset wrapper", () => {
     expect(process.env.OPENCLAW_SESSION_KEY).toBeUndefined();
     expect(process.env.OPENCLAW_SHELL).toBeUndefined();
     restoreRuntimeEnv(before);
+  });
+
+  it("prepends ~/.openclaw/workspace/bin to PATH on first ensureSession", async () => {
+    const baseStore: TestSessionStore = {
+      load: vi.fn(async () => undefined),
+      save: vi.fn(async () => {}),
+    };
+    const { runtime, delegate } = makeRuntime(baseStore);
+
+    const originalPath = process.env.PATH;
+    const ocBin = join(homedir(), ".openclaw", "workspace", "bin");
+
+    // Strip ocBin from PATH if already present (from a previous test or real env)
+    const cleanPath = (process.env.PATH || "")
+      .split(delimiter)
+      .filter((p) => p !== ocBin)
+      .join(delimiter);
+    process.env.PATH = cleanPath;
+
+    vi.spyOn(delegate, "ensureSession").mockImplementation(async () => ({
+      sessionKey: "agent:claude:acp:binding:discord:onevtail:channel:789",
+      backend: "acpx",
+      runtimeSessionName: "runtime",
+    }));
+
+    await runtime.ensureSession({
+      sessionKey: "agent:claude:acp:binding:discord:onevtail:channel:789",
+      agent: "claude",
+      mode: "persistent",
+      cwd: "/tmp",
+    });
+
+    expect(process.env.PATH?.startsWith(`${ocBin}${delimiter}`)).toBe(true);
+
+    // Second call should not duplicate
+    const pathAfterFirst = process.env.PATH;
+    await runtime.ensureSession({
+      sessionKey: "agent:claude:acp:binding:discord:onevtail:channel:789",
+      agent: "claude",
+      mode: "persistent",
+      cwd: "/tmp",
+    });
+    expect(process.env.PATH).toBe(pathAfterFirst);
+
+    process.env.PATH = originalPath;
   });
 });

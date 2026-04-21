@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { delimiter, join } from "node:path";
 import {
   ACPX_BACKEND_ID,
   AcpxRuntime as BaseAcpxRuntime,
@@ -126,6 +128,7 @@ export class AcpxRuntime implements AcpxRuntimeLike {
   private readonly sessionStore: ResetAwareSessionStore;
   private readonly delegate: BaseAcpxRuntime;
   private runtimeEnvTail: Promise<void> = Promise.resolve();
+  private openclawBinInjected = false;
 
   constructor(
     options: AcpRuntimeOptions,
@@ -154,6 +157,7 @@ export class AcpxRuntime implements AcpxRuntimeLike {
   }
 
   ensureSession(input: Parameters<AcpRuntime["ensureSession"]>[0]): Promise<AcpRuntimeHandle> {
+    this.ensureOpenClawBinInPath();
     return this.withPatchedRuntimeEnv(
       buildRuntimeEnvPatch({
         sessionKey: input.sessionKey,
@@ -269,6 +273,22 @@ export class AcpxRuntime implements AcpxRuntimeLike {
     } finally {
       release();
     }
+  }
+
+  /**
+   * Prepend ~/.openclaw/workspace/bin to PATH (once, persistent) so the git
+   * identity wrapper and gh-guard are reachable by child processes.
+   */
+  private ensureOpenClawBinInPath(): void {
+    if (this.openclawBinInjected) {
+      return;
+    }
+    const ocBin = join(homedir(), ".openclaw", "workspace", "bin");
+    const current = process.env.PATH || "";
+    if (!current.split(delimiter).includes(ocBin)) {
+      process.env.PATH = `${ocBin}${delimiter}${current}`;
+    }
+    this.openclawBinInjected = true;
   }
 }
 
