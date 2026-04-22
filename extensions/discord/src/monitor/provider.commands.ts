@@ -1,10 +1,12 @@
 // Discord provider module implements model/runtime integration.
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/account-id";
 import {
   listNativeCommandSpecsForConfig,
   listSkillCommandsForAgents,
   type NativeCommandSpec,
 } from "openclaw/plugin-sdk/command-auth-native";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
+import { resolveDefaultAgentId } from "openclaw/plugin-sdk/config-runtime";
 import { danger, warn, type RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import {
   normalizeLowercaseStringOrEmpty,
@@ -62,11 +64,31 @@ async function appendPluginCommandSpecs(params: {
   return merged;
 }
 
+function resolveNativeSkillAgentIdsForAccount(params: {
+  cfg: OpenClawConfig;
+  accountId?: string;
+}): string[] | undefined {
+  const accountId = normalizeLowercaseStringOrEmpty(params.accountId);
+  if (!accountId) {
+    return undefined;
+  }
+  if (accountId === normalizeLowercaseStringOrEmpty(DEFAULT_ACCOUNT_ID)) {
+    return [resolveDefaultAgentId(params.cfg)];
+  }
+  const configuredAgentIds = Array.isArray(params.cfg.agents?.list)
+    ? params.cfg.agents.list
+        .map((entry) => entry?.id?.trim())
+        .filter((id): id is string => Boolean(id))
+    : [];
+  return configuredAgentIds.includes(accountId) ? [accountId] : undefined;
+}
+
 export async function resolveDiscordProviderCommandSpecs(params: {
   cfg: OpenClawConfig;
   runtime: RuntimeEnv;
   nativeEnabled: boolean;
   nativeSkillsEnabled: boolean;
+  accountId?: string;
   maxDiscordCommands?: number;
   listSkillCommandsForAgents?: typeof listSkillCommandsForAgents;
   listNativeCommandSpecsForConfig?: typeof listNativeCommandSpecsForConfig;
@@ -79,9 +101,17 @@ export async function resolveDiscordProviderCommandSpecs(params: {
   const listNativeCommandSpecs =
     params.listNativeCommandSpecsForConfig ?? listNativeCommandSpecsForConfig;
   const maxDiscordCommands = params.maxDiscordCommands ?? 100;
+  const nativeSkillAgentIds = resolveNativeSkillAgentIdsForAccount({
+    cfg: params.cfg,
+    accountId: params.accountId,
+  });
+
   let skillCommands =
     params.nativeEnabled && params.nativeSkillsEnabled
-      ? listSkillCommands({ cfg: params.cfg })
+      ? listSkillCommands({
+          cfg: params.cfg,
+          ...(nativeSkillAgentIds ? { agentIds: nativeSkillAgentIds } : {}),
+        })
       : [];
   let commandSpecs = params.nativeEnabled
     ? listNativeCommandSpecs(params.cfg, {

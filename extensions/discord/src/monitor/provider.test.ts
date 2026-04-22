@@ -534,6 +534,75 @@ describe("monitorDiscordProvider", () => {
     expect(voiceRuntimeModuleLoadedMock).toHaveBeenCalledTimes(1);
   });
 
+  it("scopes native skill commands to the default agent for the default Discord account", async () => {
+    const cfg = {
+      ...baseConfig(),
+      agents: {
+        list: [{ id: "main", default: true }, { id: "onevpaw" }],
+      },
+    } as OpenClawConfig;
+    resolveNativeSkillsEnabledMock.mockReturnValue(true);
+    resolveDiscordAccountMock.mockReturnValue({
+      accountId: "default",
+      token: "MTIz.abc.def",
+      config: {
+        commands: { native: true, nativeSkills: true },
+        agentComponents: { enabled: false },
+        execApprovals: { enabled: false },
+      },
+    });
+
+    await monitorDiscordProvider({ config: cfg, runtime: baseRuntime() });
+
+    expect(listSkillCommandsForAgentsMock).toHaveBeenCalledWith({ cfg, agentIds: ["main"] });
+  });
+
+  it("scopes native skill commands to the matching agent for named Discord accounts", async () => {
+    const cfg = {
+      ...baseConfig(),
+      agents: {
+        list: [{ id: "main", default: true }, { id: "onevpaw" }],
+      },
+    } as OpenClawConfig;
+    resolveNativeSkillsEnabledMock.mockReturnValue(true);
+    resolveDiscordAccountMock.mockReturnValue({
+      accountId: "onevpaw",
+      token: "MTIz.abc.def",
+      config: {
+        commands: { native: true, nativeSkills: true },
+        agentComponents: { enabled: false },
+        execApprovals: { enabled: false },
+      },
+    });
+
+    await monitorDiscordProvider({ config: cfg, runtime: baseRuntime() });
+
+    expect(listSkillCommandsForAgentsMock).toHaveBeenCalledWith({ cfg, agentIds: ["onevpaw"] });
+  });
+
+  it("falls back to global native skill command discovery when account id has no matching agent", async () => {
+    const cfg = {
+      ...baseConfig(),
+      agents: {
+        list: [{ id: "main", default: true }, { id: "onevtail" }],
+      },
+    } as OpenClawConfig;
+    resolveNativeSkillsEnabledMock.mockReturnValue(true);
+    resolveDiscordAccountMock.mockReturnValue({
+      accountId: "onevpaw",
+      token: "MTIz.abc.def",
+      config: {
+        commands: { native: true, nativeSkills: true },
+        agentComponents: { enabled: false },
+        execApprovals: { enabled: false },
+      },
+    });
+
+    await monitorDiscordProvider({ config: cfg, runtime: baseRuntime() });
+
+    expect(listSkillCommandsForAgentsMock).toHaveBeenCalledWith({ cfg });
+  });
+
   it("wires exec approval button context from the resolved Discord account config", async () => {
     const cfg = createConfigWithDiscordAccount();
     const execApprovalsConfig = { enabled: true, approvers: ["123"] };
