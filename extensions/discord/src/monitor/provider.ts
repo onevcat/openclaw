@@ -8,6 +8,7 @@ import {
 } from "@buape/carbon";
 import { GatewayCloseCodes, type GatewayPlugin } from "@buape/carbon/gateway";
 import { Routes } from "discord-api-types/v10";
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/account-id";
 import { CHANNEL_APPROVAL_NATIVE_RUNTIME_CONTEXT_CAPABILITY } from "openclaw/plugin-sdk/approval-handler-adapter-runtime";
 import type { ChannelRuntimeSurface } from "openclaw/plugin-sdk/channel-contract";
 import { registerChannelRuntimeContext } from "openclaw/plugin-sdk/channel-runtime-context";
@@ -18,6 +19,7 @@ import {
 } from "openclaw/plugin-sdk/command-auth";
 import {
   isNativeCommandsExplicitlyDisabled,
+  resolveDefaultAgentId,
   resolveNativeCommandsEnabled,
   resolveNativeSkillsEnabled,
 } from "openclaw/plugin-sdk/config-runtime";
@@ -115,6 +117,29 @@ let discordVoiceRuntimePromise: Promise<DiscordVoiceRuntimeModule> | undefined;
 let discordProviderSessionRuntimePromise: Promise<DiscordProviderSessionRuntimeModule> | undefined;
 
 let fetchDiscordApplicationIdForTesting: typeof fetchDiscordApplicationId | undefined;
+type GetPluginCommandSpecsForTesting = (
+  ...args: Parameters<typeof getPluginCommandSpecs>
+) => ReturnType<typeof getPluginCommandSpecs>;
+type ResolveDiscordAccountForTesting = (
+  ...args: Parameters<typeof resolveDiscordAccount>
+) => ReturnType<typeof resolveDiscordAccount>;
+type ResolveNativeCommandsEnabledForTesting = (
+  ...args: Parameters<typeof resolveNativeCommandsEnabled>
+) => ReturnType<typeof resolveNativeCommandsEnabled>;
+type ResolveNativeSkillsEnabledForTesting = (
+  ...args: Parameters<typeof resolveNativeSkillsEnabled>
+) => ReturnType<typeof resolveNativeSkillsEnabled>;
+type ListNativeCommandSpecsForConfigForTesting = (
+  ...args: Parameters<typeof listNativeCommandSpecsForConfig>
+) => ReturnType<typeof listNativeCommandSpecsForConfig>;
+type ListSkillCommandsForAgentsForTesting = (
+  ...args: Parameters<typeof listSkillCommandsForAgents>
+) => ReturnType<typeof listSkillCommandsForAgents>;
+type IsVerboseForTesting = (...args: Parameters<typeof isVerbose>) => ReturnType<typeof isVerbose>;
+type ShouldLogVerboseForTesting = (
+  ...args: Parameters<typeof shouldLogVerbose>
+) => ReturnType<typeof shouldLogVerbose>;
+
 let createDiscordNativeCommandForTesting: typeof createDiscordNativeCommand | undefined;
 let runDiscordGatewayLifecycleForTesting: typeof runDiscordGatewayLifecycle | undefined;
 let createDiscordGatewayPluginForTesting: typeof createDiscordGatewayPlugin | undefined;
@@ -130,14 +155,16 @@ let createClientForTesting:
       plugins: ConstructorParameters<typeof Client>[2],
     ) => Client)
   | undefined;
-let getPluginCommandSpecsForTesting: typeof getPluginCommandSpecs | undefined;
-let resolveDiscordAccountForTesting: typeof resolveDiscordAccount | undefined;
-let resolveNativeCommandsEnabledForTesting: typeof resolveNativeCommandsEnabled | undefined;
-let resolveNativeSkillsEnabledForTesting: typeof resolveNativeSkillsEnabled | undefined;
-let listNativeCommandSpecsForConfigForTesting: typeof listNativeCommandSpecsForConfig | undefined;
-let listSkillCommandsForAgentsForTesting: typeof listSkillCommandsForAgents | undefined;
-let isVerboseForTesting: typeof isVerbose | undefined;
-let shouldLogVerboseForTesting: typeof shouldLogVerbose | undefined;
+let getPluginCommandSpecsForTesting: GetPluginCommandSpecsForTesting | undefined;
+let resolveDiscordAccountForTesting: ResolveDiscordAccountForTesting | undefined;
+let resolveNativeCommandsEnabledForTesting: ResolveNativeCommandsEnabledForTesting | undefined;
+let resolveNativeSkillsEnabledForTesting: ResolveNativeSkillsEnabledForTesting | undefined;
+let listNativeCommandSpecsForConfigForTesting:
+  | ListNativeCommandSpecsForConfigForTesting
+  | undefined;
+let listSkillCommandsForAgentsForTesting: ListSkillCommandsForAgentsForTesting | undefined;
+let isVerboseForTesting: IsVerboseForTesting | undefined;
+let shouldLogVerboseForTesting: ShouldLogVerboseForTesting | undefined;
 
 async function loadDiscordVoiceRuntime(): Promise<DiscordVoiceRuntimeModule> {
   if (loadDiscordVoiceRuntimeForTesting) {
@@ -160,6 +187,25 @@ function normalizeBooleanForTesting(value: unknown): boolean | undefined {
     return value;
   }
   return undefined;
+}
+
+function resolveNativeSkillAgentIdsForAccount(params: {
+  cfg: OpenClawConfig;
+  accountId: string;
+}): string[] | undefined {
+  const accountId = normalizeLowercaseStringOrEmpty(params.accountId);
+  if (!accountId) {
+    return undefined;
+  }
+  if (accountId === normalizeLowercaseStringOrEmpty(DEFAULT_ACCOUNT_ID)) {
+    return [resolveDefaultAgentId(params.cfg)];
+  }
+  const configuredAgentIds = Array.isArray(params.cfg.agents?.list)
+    ? params.cfg.agents.list
+        .map((entry) => entry?.id?.trim())
+        .filter((id): id is string => Boolean(id))
+    : [];
+  return configuredAgentIds.includes(accountId) ? [accountId] : undefined;
 }
 
 function resolveThreadBindingsEnabledForTesting(params: {
@@ -729,9 +775,16 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
   });
 
   const maxDiscordCommands = 100;
+  const nativeSkillAgentIds = resolveNativeSkillAgentIdsForAccount({
+    cfg,
+    accountId: account.accountId,
+  });
   let skillCommands =
     nativeEnabled && nativeSkillsEnabled
-      ? (listSkillCommandsForAgentsForTesting ?? listSkillCommandsForAgents)({ cfg })
+      ? (listSkillCommandsForAgentsForTesting ?? listSkillCommandsForAgents)({
+          cfg,
+          ...(nativeSkillAgentIds ? { agentIds: nativeSkillAgentIds } : {}),
+        })
       : [];
   let commandSpecs = nativeEnabled
     ? (listNativeCommandSpecsForConfigForTesting ?? listNativeCommandSpecsForConfig)(cfg, {
@@ -1199,28 +1252,28 @@ export const __testing = {
   ) {
     createClientForTesting = mock;
   },
-  setGetPluginCommandSpecs(mock?: typeof getPluginCommandSpecs) {
+  setGetPluginCommandSpecs(mock?: GetPluginCommandSpecsForTesting) {
     getPluginCommandSpecsForTesting = mock;
   },
-  setResolveDiscordAccount(mock?: typeof resolveDiscordAccount) {
+  setResolveDiscordAccount(mock?: ResolveDiscordAccountForTesting) {
     resolveDiscordAccountForTesting = mock;
   },
-  setResolveNativeCommandsEnabled(mock?: typeof resolveNativeCommandsEnabled) {
+  setResolveNativeCommandsEnabled(mock?: ResolveNativeCommandsEnabledForTesting) {
     resolveNativeCommandsEnabledForTesting = mock;
   },
-  setResolveNativeSkillsEnabled(mock?: typeof resolveNativeSkillsEnabled) {
+  setResolveNativeSkillsEnabled(mock?: ResolveNativeSkillsEnabledForTesting) {
     resolveNativeSkillsEnabledForTesting = mock;
   },
-  setListNativeCommandSpecsForConfig(mock?: typeof listNativeCommandSpecsForConfig) {
+  setListNativeCommandSpecsForConfig(mock?: ListNativeCommandSpecsForConfigForTesting) {
     listNativeCommandSpecsForConfigForTesting = mock;
   },
-  setListSkillCommandsForAgents(mock?: typeof listSkillCommandsForAgents) {
+  setListSkillCommandsForAgents(mock?: ListSkillCommandsForAgentsForTesting) {
     listSkillCommandsForAgentsForTesting = mock;
   },
-  setIsVerbose(mock?: typeof isVerbose) {
+  setIsVerbose(mock?: IsVerboseForTesting) {
     isVerboseForTesting = mock;
   },
-  setShouldLogVerbose(mock?: typeof shouldLogVerbose) {
+  setShouldLogVerbose(mock?: ShouldLogVerboseForTesting) {
     shouldLogVerboseForTesting = mock;
   },
 };
