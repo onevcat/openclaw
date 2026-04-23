@@ -7,7 +7,7 @@ import {
 } from "openclaw/plugin-sdk/command-auth-native";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { resolveDefaultAgentId } from "openclaw/plugin-sdk/config-runtime";
-import { danger, warn, type RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
+import { danger, shouldLogVerbose, warn, type RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeStringEntriesLower,
@@ -128,6 +128,21 @@ export async function resolveDiscordProviderCommandSpecs(params: {
     });
   }
   const initialCommandCount = commandSpecs.length;
+  if (shouldLogVerbose()) {
+    params.runtime.log?.(
+      `discord[${normalizeLowercaseStringOrEmpty(params.accountId) || "unknown"}]: diag resolve native=${params.nativeEnabled} nativeSkills=${params.nativeSkillsEnabled} scopedAgentIds=${JSON.stringify(nativeSkillAgentIds ?? null)} skillCommands=${skillCommands.length} totalCommandSpecs=${initialCommandCount} limit=${maxDiscordCommands}`,
+    );
+    if (skillCommands.length > 0) {
+      const namesPreview = skillCommands
+        .slice(0, 20)
+        .map((c) => c.name)
+        .join(", ");
+      const extra = skillCommands.length > 20 ? ` (+${skillCommands.length - 20} more)` : "";
+      params.runtime.log?.(
+        `discord[${normalizeLowercaseStringOrEmpty(params.accountId) || "unknown"}]: diag skill names (first 20): ${namesPreview}${extra}`,
+      );
+    }
+  }
   if (
     params.nativeEnabled &&
     params.nativeSkillsEnabled &&
@@ -155,6 +170,11 @@ export async function resolveDiscordProviderCommandSpecs(params: {
       warn(
         `discord: ${commandSpecs.length} commands exceeds limit; some commands may fail to deploy.`,
       ),
+    );
+  }
+  if (shouldLogVerbose()) {
+    params.runtime.log?.(
+      `discord[${normalizeLowercaseStringOrEmpty(params.accountId) || "unknown"}]: diag final deploying total=${commandSpecs.length} skill=${skillCommands.length}`,
     );
   }
   return { skillCommands, commandSpecs };
