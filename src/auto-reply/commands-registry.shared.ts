@@ -358,6 +358,7 @@ export function buildBuiltinChatCommands(
       category: "tools",
       tier: "standard",
     }),
+    /* Disabled locally to reclaim Discord native command slots.
     defineChatCommand({
       key: "export-session",
       nativeName: "export-session",
@@ -375,6 +376,8 @@ export function buildBuiltinChatCommands(
         },
       ],
     }),
+    */
+    /* Disabled locally to reclaim Discord native command slots.
     defineChatCommand({
       key: "export-trajectory",
       nativeName: "export-trajectory",
@@ -436,6 +439,7 @@ export function buildBuiltinChatCommands(
           "• Help – Show usage guide",
       },
     }),
+    */
     defineChatCommand({
       key: "whoami",
       nativeName: "whoami",
@@ -444,6 +448,7 @@ export function buildBuiltinChatCommands(
       category: "status",
       tier: "power",
     }),
+    /* Disabled locally to reclaim Discord native command slots.
     defineChatCommand({
       key: "session",
       nativeName: "session",
@@ -467,6 +472,8 @@ export function buildBuiltinChatCommands(
       ],
       argsMenu: "auto",
     }),
+    */
+    /* Disabled locally to reclaim Discord native command slots.
     defineChatCommand({
       key: "subagents",
       nativeName: "subagents",
@@ -495,6 +502,7 @@ export function buildBuiltinChatCommands(
       ],
       argsMenu: "auto",
     }),
+    */
     defineChatCommand({
       key: "acp",
       nativeName: "acp",
@@ -536,6 +544,7 @@ export function buildBuiltinChatCommands(
       ],
       argsMenu: "auto",
     }),
+    /* Disabled locally to reclaim Discord native command slots.
     defineChatCommand({
       key: "focus",
       nativeName: "focus",
@@ -569,6 +578,7 @@ export function buildBuiltinChatCommands(
       category: "management",
       tier: "standard",
     }),
+    */
     defineChatCommand({
       key: "steer",
       nativeName: "steer",
@@ -728,6 +738,7 @@ export function buildBuiltinChatCommands(
       category: "tools",
       tier: "power",
     }),
+    /* Disabled locally to reclaim Discord native command slots.
     defineChatCommand({
       key: "activation",
       nativeName: "activation",
@@ -762,6 +773,7 @@ export function buildBuiltinChatCommands(
       ],
       argsMenu: "auto",
     }),
+    */
     defineChatCommand({
       key: "reset",
       nativeName: "reset",
@@ -847,6 +859,7 @@ export function buildBuiltinChatCommands(
         },
       ],
     }),
+    /* Disabled locally to reclaim Discord native command slots.
     defineChatCommand({
       key: "trace",
       nativeName: "trace",
@@ -892,6 +905,7 @@ export function buildBuiltinChatCommands(
       ],
       argsMenu: "auto",
     }),
+    */
     defineChatCommand({
       key: "reasoning",
       nativeName: "reasoning",
@@ -986,6 +1000,7 @@ export function buildBuiltinChatCommands(
       acceptsArgs: true,
       category: "options",
     }),
+    /* Disabled locally to reclaim Discord native command slots.
     defineChatCommand({
       key: "queue",
       nativeName: "queue",
@@ -1020,6 +1035,7 @@ export function buildBuiltinChatCommands(
       argsParsing: "none",
       formatArgs: COMMAND_ARG_FORMATTERS.queue,
     }),
+    */
     defineChatCommand({
       key: "bash",
       description: "Run host shell commands (host-only).",
