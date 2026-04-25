@@ -81,6 +81,14 @@ vi.mock("../process/supervisor/index.js", () => ({
       const env = input.env ?? {};
       if (command.includes("OPENCLAW_SHELL")) {
         input.onStdout?.(env.OPENCLAW_SHELL ?? "");
+      } else if (command.includes("OPENCLAW_AGENT_ID")) {
+        if (command.includes("OPENCLAW_SESSION_ID")) {
+          input.onStdout?.(
+            `${env.OPENCLAW_AGENT_ID ?? ""}|${env.OPENCLAW_SESSION_KEY ?? ""}|${env.OPENCLAW_SESSION_ID ?? ""}`,
+          );
+        } else {
+          input.onStdout?.(`${env.OPENCLAW_AGENT_ID ?? ""}|${env.OPENCLAW_SESSION_KEY ?? ""}`);
+        }
       } else if (command.includes("SSLKEYLOGFILE")) {
         input.onStdout?.(env.SSLKEYLOGFILE ?? "");
       } else if (command.includes("$PATH")) {
