@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { installedPluginRoot } from "openclaw/plugin-sdk/test-fixtures";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import { hashConfigIncludeRaw } from "../config/includes.js";
 import {
@@ -1582,6 +1582,40 @@ describe("plugins cli install", () => {
     expect(record.installPath).toBe(cliInstallPath("brave"));
     expect(record.version).toBe("1.2.3");
     expect(writeConfigFile).toHaveBeenCalledWith(enabledCfg);
+  });
+
+  it("prefers official external plugin ids over same-name local state directories", async () => {
+    const cfg = createEmptyPluginConfig();
+    const enabledCfg = createEnabledPluginConfig("discord");
+    const existsSpy = vi.spyOn(fs, "existsSync").mockImplementation((target) => {
+      const value = String(target);
+      return value === "discord" || value.endsWith(`${path.sep}discord`);
+    });
+
+    loadConfig.mockReturnValue(cfg);
+    findBundledPluginSourceMock.mockReturnValue(undefined);
+    installPluginFromNpmSpec.mockResolvedValue(createNpmPluginInstallResult("discord"));
+    enablePluginInConfig.mockReturnValue({ config: enabledCfg });
+    applyExclusiveSlotSelection.mockReturnValue({
+      config: enabledCfg,
+      warnings: [],
+    });
+
+    try {
+      await runPluginsCommand(["plugins", "install", "discord"]);
+    } finally {
+      existsSpy.mockRestore();
+    }
+
+    expect(installPluginFromPath).not.toHaveBeenCalled();
+    expect(installHooksFromPath).not.toHaveBeenCalled();
+    expect(installPluginFromNpmSpec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spec: "@openclaw/discord",
+        expectedPluginId: "discord",
+        trustedSourceLinkedOfficialInstall: true,
+      }),
+    );
   });
 
   it("passes third-party external catalog integrity with catalog install trust", async () => {
