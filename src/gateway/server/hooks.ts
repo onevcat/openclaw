@@ -19,7 +19,8 @@ import type { CronJob } from "../../cron/types.js";
 import { requestHeartbeat } from "../../infra/heartbeat-wake.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
 import type { createSubsystemLogger } from "../../logging/subsystem.js";
-import type { HookAgentDispatchPayload, HooksConfigResolved } from "../hooks.js";
+import { buildHookCallbackPayload, sendHookCallback } from "../hook-callback.js";
+import { type HookAgentDispatchPayload, type HooksConfigResolved } from "../hooks.js";
 import { createHooksRequestHandler, type HookClientIpConfig } from "./hooks-request-handler.js";
 
 /**
@@ -167,6 +168,21 @@ export function createGatewayHooksRequestHandler(params: {
           sessionKey,
           lane: "cron",
         });
+        if (value.callback) {
+          await sendHookCallback({
+            callback: value.callback,
+            payload: buildHookCallbackPayload({
+              callbackBody: value.callback.body,
+              runId,
+              hookName: value.name,
+              agentId: value.agentId,
+              sessionKey,
+              result,
+            }),
+            log: (message) => logHooks.warn(message),
+          });
+        }
+
         const summary = resolveHookRunSummary(result);
         const prefix =
           result.status === "ok" ? `Hook ${safeName}` : `Hook ${safeName} (${result.status})`;

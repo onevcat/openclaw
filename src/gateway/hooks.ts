@@ -218,6 +218,13 @@ export function normalizeWakePayload(
   return { ok: true, value: { text: normalizedText, mode } };
 }
 
+export type HookAgentCallbackConfig = {
+  url: string;
+  token?: string;
+  body?: Record<string, unknown>;
+  timeoutSeconds?: number;
+};
+
 type HookAgentPayload = {
   message: string;
   name: string;
@@ -231,6 +238,7 @@ type HookAgentPayload = {
   model?: string;
   thinking?: string;
   timeoutSeconds?: number;
+  callback?: HookAgentCallbackConfig;
 };
 
 /** Normalized agent dispatch payload after hook policy/session resolution. */
@@ -459,6 +467,49 @@ export function normalizeAgentPayload(payload: Record<string, unknown>):
     typeof timeoutRaw === "number" && Number.isFinite(timeoutRaw) && timeoutRaw > 0
       ? Math.floor(timeoutRaw)
       : undefined;
+
+  const callbackRaw = payload.callback;
+  let callback: HookAgentCallbackConfig | undefined;
+  if (callbackRaw !== undefined) {
+    if (typeof callbackRaw !== "object" || callbackRaw === null) {
+      return { ok: false, error: "callback must be an object" };
+    }
+    const callbackObj = callbackRaw as Record<string, unknown>;
+    const callbackUrl =
+      typeof callbackObj.url === "string" && callbackObj.url.trim() ? callbackObj.url.trim() : "";
+    if (!callbackUrl) {
+      return { ok: false, error: "callback.url required" };
+    }
+    try {
+      new URL(callbackUrl);
+    } catch {
+      return { ok: false, error: "callback.url invalid" };
+    }
+    const callbackToken =
+      typeof callbackObj.token === "string" && callbackObj.token.trim()
+        ? callbackObj.token.trim()
+        : undefined;
+    const callbackBody =
+      typeof callbackObj.body === "object" &&
+      callbackObj.body !== null &&
+      !Array.isArray(callbackObj.body)
+        ? (callbackObj.body as Record<string, unknown>)
+        : undefined;
+    const callbackTimeoutSeconds =
+      typeof callbackObj.timeoutSeconds === "number" &&
+      Number.isFinite(callbackObj.timeoutSeconds) &&
+      callbackObj.timeoutSeconds > 0
+        ? Math.min(30, Math.floor(callbackObj.timeoutSeconds))
+        : undefined;
+
+    callback = {
+      url: callbackUrl,
+      token: callbackToken,
+      body: callbackBody,
+      timeoutSeconds: callbackTimeoutSeconds,
+    };
+  }
+
   return {
     ok: true,
     value: {
@@ -474,6 +525,7 @@ export function normalizeAgentPayload(payload: Record<string, unknown>):
       model,
       thinking,
       timeoutSeconds,
+      callback,
     },
   };
 }
