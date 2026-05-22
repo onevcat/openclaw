@@ -84,7 +84,7 @@ describe("buildHookCallbackPayload", () => {
     });
   });
 
-  it("keeps runtime errors fatal even if the terminal block says ok", () => {
+  it("lets required terminal hook result override soft intermediate errors", () => {
     const payload = buildHookCallbackPayload({
       callbackBody: { requireTerminalHookResult: true },
       runId: "run-3",
@@ -94,9 +94,35 @@ describe("buildHookCallbackPayload", () => {
         status: "error",
         error: "push_failed",
         outputText: [
+          "Recovered after an intermediate tool failure.",
+          "<openclaw_hook_result>",
+          '{"status":"ok","summary":"Opened PR #157 and posted the issue follow-up comment."}',
+          "</openclaw_hook_result>",
+        ].join("\n"),
+      },
+    });
+
+    expect(payload).toMatchObject({
+      ok: true,
+      status: "ok",
+      summary: "Opened PR #157 and posted the issue follow-up comment.",
+      error: undefined,
+    });
+  });
+
+  it("keeps hard runtime failures fatal even if the required terminal block says ok", () => {
+    const payload = buildHookCallbackPayload({
+      callbackBody: { requireTerminalHookResult: true },
+      runId: "run-4",
+      hookName: "MeowHook-GitHub-onevpaw",
+      sessionKey: "agent:onevpaw:hook:test",
+      result: {
+        status: "error",
+        error: "session timed out",
+        outputText: [
           "Trying to recover.",
           "<openclaw_hook_result>",
-          '{"status":"ok","summary":"should not override runtime error"}',
+          '{"status":"ok","summary":"should not override runtime timeout"}',
           "</openclaw_hook_result>",
         ].join("\n"),
       },
@@ -105,7 +131,30 @@ describe("buildHookCallbackPayload", () => {
     expect(payload).toMatchObject({
       ok: false,
       status: "error",
-      error: "push_failed",
+      error: "session timed out",
+    });
+  });
+
+  it("treats timeout status as a hard runtime failure", () => {
+    const payload = buildHookCallbackPayload({
+      callbackBody: { requireTerminalHookResult: true },
+      runId: "run-5",
+      hookName: "MeowHook-GitHub-onevpaw",
+      sessionKey: "agent:onevpaw:hook:test",
+      result: {
+        status: "timeout",
+        outputText: [
+          "Trying to recover.",
+          "<openclaw_hook_result>",
+          '{"status":"ok","summary":"should not override timeout status"}',
+          "</openclaw_hook_result>",
+        ].join("\n"),
+      },
+    });
+
+    expect(payload).toMatchObject({
+      ok: false,
+      status: "timeout",
     });
   });
 });

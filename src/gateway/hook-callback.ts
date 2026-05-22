@@ -110,6 +110,42 @@ function resolveCallbackResult(params: {
 }): { ok: boolean; status: string; summary?: string; error?: string } {
   const { result, parsedTerminalResult, requireTerminalHookResult } = params;
 
+  if (requireTerminalHookResult) {
+    if (!parsedTerminalResult) {
+      return {
+        ok: false,
+        status: "error",
+        summary: result.summary,
+        error: "missing_terminal_hook_result",
+      };
+    }
+
+    if (result.status !== "ok" && isHardFailure(result)) {
+      return {
+        ok: false,
+        status: result.status,
+        summary: parsedTerminalResult.summary,
+        error: result.error ?? parsedTerminalResult.error,
+      };
+    }
+
+    if (parsedTerminalResult.status !== "ok") {
+      return {
+        ok: false,
+        status: "failed",
+        summary: parsedTerminalResult.summary,
+        error: parsedTerminalResult.error ?? "terminal_hook_result_failed",
+      };
+    }
+
+    return {
+      ok: true,
+      status: "ok",
+      summary: parsedTerminalResult.summary,
+      error: undefined,
+    };
+  }
+
   if (result.status !== "ok") {
     return {
       ok: false,
@@ -120,14 +156,6 @@ function resolveCallbackResult(params: {
   }
 
   if (!parsedTerminalResult) {
-    if (requireTerminalHookResult) {
-      return {
-        ok: false,
-        status: "error",
-        summary: result.summary,
-        error: "missing_terminal_hook_result",
-      };
-    }
     return {
       ok: true,
       status: result.status,
@@ -151,6 +179,19 @@ function resolveCallbackResult(params: {
     summary: parsedTerminalResult.summary,
     error: undefined,
   };
+}
+
+function isHardFailure(result: HookCallbackResult): boolean {
+  if (result.status === "ok") {
+    return false;
+  }
+  const message = `${result.status} ${result.error ?? ""}`.toLowerCase();
+  if (!message) {
+    return false;
+  }
+  return /\btimeout\b|timed\s+out|\babort(?:ed)?\b|\binterrupted\b|\bcancel(?:ed|led)?\b/.test(
+    message,
+  );
 }
 
 function toSafeLogUrl(rawUrl: string): string {
