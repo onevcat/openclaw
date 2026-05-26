@@ -158,6 +158,38 @@ describe("resolveCronPayloadOutcome", () => {
     ]);
   });
 
+  it("preserves terminal hook result text for callbacks despite fatal tool failures", () => {
+    const finalText = [
+      "Recovered after a failed writeback command.",
+      "",
+      "<openclaw_hook_result>",
+      '{"status":"ok","summary":"Opened PR #354 and posted the GitHub writeback."}',
+      "</openclaw_hook_result>",
+    ].join("\n");
+    const result = resolveCronPayloadOutcome({
+      payloads: [{ text: "Intermediate output" }],
+      finalAssistantVisibleText: finalText,
+      preferFinalAssistantVisibleText: true,
+      failureSignal: {
+        kind: "command_failed",
+        source: "tool",
+        toolName: "exec",
+        message: "zsh: command not found: omx",
+        fatalForCron: true,
+      },
+    });
+
+    expect(result.hasFatalErrorPayload).toBe(true);
+    expect(result.embeddedRunError).toBe(
+      "cron classifier: command_failed failure from exec: zsh: command not found: omx",
+    );
+    expect(result.summary).toBe("zsh: command not found: omx");
+    expect(result.outputText).toBe(finalText);
+    expect(result.deliveryPayloads).toEqual([
+      { text: "zsh: command not found: omx", isError: true },
+    ]);
+  });
+
   it("keeps error payloads fatal when the run also reported a run-level error", () => {
     const result = resolveCronPayloadOutcome({
       payloads: [

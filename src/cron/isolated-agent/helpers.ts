@@ -40,6 +40,16 @@ type NormalizedCronFailureSignal = CronFailureSignal & {
   fatalForCron: true;
 };
 
+const HOOK_RESULT_OPEN_TAG = "<openclaw_hook_result>";
+const HOOK_RESULT_CLOSE_TAG = "</openclaw_hook_result>";
+
+function containsTerminalHookResult(text: string | undefined): boolean {
+  if (!text) {
+    return false;
+  }
+  return text.includes(HOOK_RESULT_OPEN_TAG) && text.includes(HOOK_RESULT_CLOSE_TAG);
+}
+
 function normalizeCronFailureSignal(
   signal: CronFailureSignal | undefined,
 ): NormalizedCronFailureSignal | undefined {
@@ -343,9 +353,13 @@ export function resolveCronPayloadOutcome(params: {
   const fatalDeliveryPayload = fatalDeliveryText
     ? ({ text: fatalDeliveryText, isError: true } satisfies DeliveryPayload)
     : undefined;
+  const callbackOutputText =
+    fatalDeliveryText && containsTerminalHookResult(outputText)
+      ? outputText
+      : (fatalDeliveryText ?? outputText);
   return {
     summary: fatalDeliveryText ? (pickSummaryFromOutput(fatalDeliveryText) ?? summary) : summary,
-    outputText: fatalDeliveryText ?? outputText,
+    outputText: callbackOutputText,
     synthesizedText: fatalDeliveryText ?? synthesizedText,
     deliveryPayload: fatalDeliveryPayload ?? deliveryPayload,
     deliveryPayloads: fatalDeliveryPayload ? [fatalDeliveryPayload] : resolvedDeliveryPayloads,
