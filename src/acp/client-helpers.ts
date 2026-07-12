@@ -10,6 +10,7 @@ import {
   materializeWindowsSpawnProgram,
   resolveWindowsSpawnProgram,
 } from "../plugin-sdk/windows-spawn.js";
+import { resolveOpenClawRuntimeEnv } from "../runtime/openclaw-env.js";
 import {
   listKnownProviderAuthEnvVarNames,
   omitEnvKeysCaseInsensitive,
@@ -154,6 +155,9 @@ export async function resolvePermissionRequest(
 
 type AcpClientSpawnEnvOptions = {
   stripKeys?: Iterable<string>;
+  agentId?: string;
+  sessionKey?: string;
+  sessionId?: string;
 };
 
 /** Builds the sanitized environment used when spawning an ACP client process. */
@@ -162,7 +166,15 @@ export function resolveAcpClientSpawnEnv(
   options: AcpClientSpawnEnvOptions = {},
 ): NodeJS.ProcessEnv {
   const env = omitEnvKeysCaseInsensitive(baseEnv, options.stripKeys ?? []);
-  env.OPENCLAW_SHELL = "acp-client";
+  Object.assign(
+    env,
+    resolveOpenClawRuntimeEnv({
+      shell: "acp-client",
+      agentId: options.agentId,
+      sessionKey: options.sessionKey,
+      sessionId: options.sessionId,
+    }),
+  );
   return env;
 }
 

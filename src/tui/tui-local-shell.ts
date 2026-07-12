@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process";
 import type { Component, OverlayHandle, SelectItem } from "@earendil-works/pi-tui";
 import { tryProcessCwd } from "../infra/safe-cwd.js";
+import { resolveOpenClawRuntimeEnv } from "../runtime/openclaw-env.js";
 import { createSearchableSelectList } from "./components/selectors.js";
 
 type LocalShellDeps = {
@@ -23,6 +24,9 @@ type LocalShellDeps = {
   spawnCommand?: typeof spawn;
   getCwd?: () => string | undefined;
   env?: NodeJS.ProcessEnv;
+  agentId?: string | (() => string | undefined);
+  sessionKey?: string | (() => string | undefined);
+  sessionId?: string | (() => string | undefined);
   maxOutputChars?: number;
 };
 
@@ -33,6 +37,12 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
   const spawnCommand = deps.spawnCommand ?? spawn;
   const getCwd = deps.getCwd ?? tryProcessCwd;
   const env = deps.env ?? process.env;
+  const resolveRuntimeValue = (
+    value: string | (() => string | undefined) | undefined,
+  ): string | undefined => (typeof value === "function" ? value() : value);
+  const getAgentId = () => resolveRuntimeValue(deps.agentId);
+  const getSessionKey = () => resolveRuntimeValue(deps.sessionKey);
+  const getSessionId = () => resolveRuntimeValue(deps.sessionId);
   const maxChars = deps.maxOutputChars ?? 40_000;
 
   const ensureLocalExecAllowed = async (): Promise<boolean> => {
@@ -123,7 +133,15 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
         // and is gated behind an explicit in-session approval prompt.
         shell: true,
         cwd,
-        env: { ...env, OPENCLAW_SHELL: "tui-local" },
+        env: {
+          ...env,
+          ...resolveOpenClawRuntimeEnv({
+            shell: "tui-local",
+            agentId: getAgentId(),
+            sessionKey: getSessionKey(),
+            sessionId: getSessionId(),
+          }),
+        },
       });
 
       let stdout = "";

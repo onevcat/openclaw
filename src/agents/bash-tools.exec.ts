@@ -1345,6 +1345,7 @@ export function createExecTool(
   const notifyOnExit = defaults?.notifyOnExit !== false;
   const notifyOnExitEmptySuccess = resolveNotifyOnExitEmptySuccess(defaults);
   const notifySessionKey = normalizeOptionalString(defaults?.sessionKey);
+  const notifySessionId = normalizeOptionalString(defaults?.sessionId);
   const notifyDeliveryContext = normalizeDeliveryContext({
     channel: defaults?.messageProvider,
     to: defaults?.currentChannelId,
@@ -1983,7 +1984,9 @@ export function createExecTool(
           notifyOnExit,
           notifyOnExitEmptySuccess,
           scopeKey: defaults?.scopeKey,
+          agentId,
           sessionKey: notifySessionKey,
+          sessionId: notifySessionId,
           mainKey: defaults?.mainKey,
           sessionScope: defaults?.sessionScope,
           eventRouting: defaults?.eventRouting,

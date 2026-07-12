@@ -4,7 +4,8 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs/promises";
-import path, { resolve as resolvePath } from "node:path";
+import { homedir } from "node:os";
+import path, { delimiter, resolve as resolvePath } from "node:path";
 import {
   AcpxRuntime as BaseAcpxRuntime,
   createAcpRuntime,
@@ -43,6 +44,10 @@ import {
 
 export const ACPX_BACKEND_ID = "acpx";
 
+const RUNTIME_ENV_SHELL = "acpx-runtime";
+const RUNTIME_ENV_KEYS = ["OPENCLAW_AGENT_ID", "OPENCLAW_SESSION_KEY", "OPENCLAW_SHELL"] as const;
+
+type RuntimeEnvPatch = Partial<Record<(typeof RUNTIME_ENV_KEYS)[number], string>>;
 type AcpSessionStore = AcpRuntimeOptions["sessionStore"];
 type AcpSessionRecord = Parameters<AcpSessionStore["save"]>[0];
 type AcpLoadedSessionRecord = Awaited<ReturnType<AcpSessionStore["load"]>>;
@@ -384,6 +389,28 @@ function readAgentFromHandle(handle: AcpRuntimeHandle): string | undefined {
 
 function readAgentCommandFromRecord(record: AcpLoadedSessionRecord): string | undefined {
   return readRecordAgentCommand(record);
+}
+
+function asTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function buildRuntimeEnvPatch(params: {
+  sessionKey?: string;
+  runtimeAgent?: string;
+}): RuntimeEnvPatch {
+  const patch: RuntimeEnvPatch = {
+    OPENCLAW_SHELL: RUNTIME_ENV_SHELL,
+  };
+  const sessionKey = asTrimmedString(params.sessionKey);
+  const agentId = normalizeAgentName(params.runtimeAgent) ?? readAgentFromSessionKey(sessionKey);
+  if (agentId) {
+    patch.OPENCLAW_AGENT_ID = agentId;
+  }
+  if (sessionKey) {
+    patch.OPENCLAW_SESSION_KEY = sessionKey;
+  }
+  return patch;
 }
 
 function readAgentPidFromRecord(record: AcpLoadedSessionRecord): number | undefined {
@@ -736,6 +763,8 @@ export class AcpxRuntime implements AcpRuntime {
   private readonly processLeaseStore: AcpxProcessLeaseStore | undefined;
   private readonly launchLeaseScope = new AsyncLocalStorage<AcpxLaunchLeaseContext | undefined>();
   private readonly cwd: string;
+  private runtimeEnvTail: Promise<void> = Promise.resolve();
+  private openclawBinInjected = false;
 
   constructor(options: OpenClawAcpxRuntimeOptions, testOptions?: AcpxRuntimeTestOptions) {
     const { openclawProcessCleanup, ...delegateTestOptions } = testOptions ?? {};
@@ -1099,39 +1128,48 @@ export class AcpxRuntime implements AcpRuntime {
       resumeSessionId: input.resumeSessionId,
     }));
 
-    if (!codexModelOverride) {
-      return await this.runWithLaunchLease({
-        sessionKey: ensureInput.sessionKey,
-        command: stableLaunchCommand,
-        enabled: shouldStartWithLease,
-        run: () =>
-          this.withCodexWrapperDiagnostics({
+    return await this.withPatchedRuntimeEnv(
+      buildRuntimeEnvPatch({
+        sessionKey: input.sessionKey,
+        runtimeAgent: input.agent,
+      }),
+      async () => {
+        this.ensureOpenClawBinInPath();
+        if (!codexModelOverride) {
+          return await this.runWithLaunchLease({
+            sessionKey: ensureInput.sessionKey,
             command: stableLaunchCommand,
-            fallbackCode: "ACP_SESSION_INIT_FAILED",
-            run: () => ensureDelegateSessionWithModelFallback(delegate, ensureInput),
-          }),
-      });
-    }
+            enabled: shouldStartWithLease,
+            run: () =>
+              this.withCodexWrapperDiagnostics({
+                command: stableLaunchCommand,
+                fallbackCode: "ACP_SESSION_INIT_FAILED",
+                run: () => ensureDelegateSessionWithModelFallback(delegate, ensureInput),
+              }),
+          });
+        }
 
-    const normalizedInput = {
-      ...ensureInput,
-      ...(codexAcpSessionModelId(codexModelOverride)
-        ? { model: codexAcpSessionModelId(codexModelOverride) }
-        : {}),
-    };
-    return await this.runWithLaunchLease({
-      sessionKey: input.sessionKey,
-      command: stableLaunchCommand,
-      enabled: shouldStartWithLease,
-      run: () =>
-        this.codexAcpModelOverrideScope.run(codexModelOverride, () =>
-          this.withCodexWrapperDiagnostics({
-            command: stableLaunchCommand,
-            fallbackCode: "ACP_SESSION_INIT_FAILED",
-            run: () => delegate.ensureSession(withAcpxSessionOptions(normalizedInput)),
-          }),
-        ),
-    });
+        const normalizedInput = {
+          ...ensureInput,
+          ...(codexAcpSessionModelId(codexModelOverride)
+            ? { model: codexAcpSessionModelId(codexModelOverride) }
+            : {}),
+        };
+        return await this.runWithLaunchLease({
+          sessionKey: input.sessionKey,
+          command: stableLaunchCommand,
+          enabled: shouldStartWithLease,
+          run: () =>
+            this.codexAcpModelOverrideScope.run(codexModelOverride, () =>
+              this.withCodexWrapperDiagnostics({
+                command: stableLaunchCommand,
+                fallbackCode: "ACP_SESSION_INIT_FAILED",
+                run: () => delegate.ensureSession(withAcpxSessionOptions(normalizedInput)),
+              }),
+            ),
+        });
+      },
+    );
   }
 
   async *runTurn(input: Parameters<AcpRuntime["runTurn"]>[0]): AsyncIterable<AcpRuntimeEvent> {
@@ -1366,6 +1404,68 @@ export class AcpxRuntime implements AcpRuntime {
     // Keep the scoped delegate reachable so the next ensure can replace it;
     // close() owns cache release when the session lifecycle ends.
     this.sessionStore.markFresh(input.sessionKey);
+  }
+
+  private applyRuntimeEnv(patch: RuntimeEnvPatch): () => void {
+    const previous: Partial<Record<(typeof RUNTIME_ENV_KEYS)[number], string>> = {};
+    for (const key of RUNTIME_ENV_KEYS) {
+      previous[key] = process.env[key];
+      const nextValue = asTrimmedString(patch[key]);
+      if (nextValue) {
+        process.env[key] = nextValue;
+      } else {
+        delete process.env[key];
+      }
+    }
+    return () => {
+      for (const key of RUNTIME_ENV_KEYS) {
+        const previousValue = previous[key];
+        if (typeof previousValue === "string") {
+          process.env[key] = previousValue;
+        } else {
+          delete process.env[key];
+        }
+      }
+    };
+  }
+
+  private async acquirePatchedRuntimeEnv(patch: RuntimeEnvPatch): Promise<() => void> {
+    const waitForPrevious = this.runtimeEnvTail;
+    let releaseQueue: (() => void) | undefined;
+    this.runtimeEnvTail = new Promise<void>((resolve) => {
+      releaseQueue = resolve;
+    });
+    await waitForPrevious;
+    const restore = this.applyRuntimeEnv(patch);
+    return () => {
+      restore();
+      releaseQueue?.();
+    };
+  }
+
+  private async withPatchedRuntimeEnv<T>(
+    patch: RuntimeEnvPatch,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    const release = await this.acquirePatchedRuntimeEnv(patch);
+    try {
+      return await run();
+    } finally {
+      release();
+    }
+  }
+
+  /** Prepend ~/.openclaw/workspace/bin to PATH so git/gh identity wrappers are visible. */
+  private ensureOpenClawBinInPath(): void {
+    if (this.openclawBinInjected) {
+      return;
+    }
+    const ocBin = path.join(homedir(), ".openclaw", "workspace", "bin");
+    const current = process.env.PATH || "";
+    if (!current.split(delimiter).includes(ocBin)) {
+      process.env.PATH = current ? `${ocBin}${delimiter}${current}` : ocBin;
+    }
+    this.openclawBinInjected = true;
   }
 
   async close(input: Parameters<AcpRuntime["close"]>[0]): Promise<void> {

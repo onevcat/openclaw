@@ -28,6 +28,9 @@ type AcpClientOptions = {
   serverArgs?: string[];
   serverVerbose?: boolean;
   verbose?: boolean;
+  agentId?: string;
+  sessionKey?: string;
+  sessionId?: string;
 };
 
 type AcpClientHandle = {
@@ -127,7 +130,12 @@ async function createAcpClient(opts: AcpClientOptions = {}): Promise<AcpClientHa
     stripProviderAuthEnvVars,
     activeSkillEnvKeys: getActiveSkillEnvKeys(),
   });
-  const spawnEnv = resolveAcpClientSpawnEnv(process.env, { stripKeys });
+  const spawnEnv = resolveAcpClientSpawnEnv(process.env, {
+    stripKeys,
+    agentId: opts.agentId,
+    sessionKey: opts.sessionKey,
+    sessionId: opts.sessionId,
+  });
   const spawnInvocation = resolveAcpClientSpawnInvocation(
     { serverCommand, serverArgs: effectiveArgs },
     {

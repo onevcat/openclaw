@@ -17,6 +17,7 @@ import {
 import { requestHeartbeat } from "../infra/heartbeat-wake.js";
 import { findPathKey, mergePathPrepend, removePathPrepend } from "../infra/path-prepend.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
+import { resolveOpenClawRuntimeEnv } from "../runtime/openclaw-env.js";
 import { isSubagentSessionKey } from "../sessions/session-key-utils.js";
 /**
  * Bash exec runtime.
@@ -595,6 +596,7 @@ export async function runExecProcess(opts: {
   notifyOnExit: boolean;
   notifyOnExitEmptySuccess?: boolean;
   scopeKey?: string;
+  agentId?: string;
   sessionKey?: string;
   /** `session.mainKey` from the runtime config; snapshotted onto the
    *  ProcessSession so background-exit notifications can remap cron-run
@@ -608,6 +610,7 @@ export async function runExecProcess(opts: {
   /** Start-time routing policy for detached exec system events. */
   eventRouting?: EventSessionRoutingPolicy;
   notifyDeliveryContext?: DeliveryContext;
+  sessionId?: string;
   timeoutSec: number | null;
   onUpdate?: (partialResult: AgentToolResult<ExecToolDetails>) => void;
 }): Promise<ExecProcessHandle> {
@@ -618,7 +621,12 @@ export async function runExecProcess(opts: {
   const supervisor = getProcessSupervisor();
   const shellRuntimeEnv: Record<string, string> = {
     ...opts.env,
-    OPENCLAW_SHELL: "exec",
+    ...resolveOpenClawRuntimeEnv({
+      shell: "exec",
+      agentId: opts.agentId,
+      sessionKey: opts.sessionKey,
+      sessionId: opts.sessionId,
+    }),
   };
 
   const session: ProcessSession = {

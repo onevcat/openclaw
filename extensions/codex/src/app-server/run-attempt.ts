@@ -51,6 +51,7 @@ import {
 import { loadExecApprovals } from "openclaw/plugin-sdk/exec-approvals-runtime";
 import { pathExists } from "openclaw/plugin-sdk/security-runtime";
 import { truncateUtf16Safe } from "openclaw/plugin-sdk/text-utility-runtime";
+import { resolveOpenClawRuntimeEnv } from "../../../../src/runtime/openclaw-env.js";
 import {
   resolveCodexAppServerForModelProvider,
   resolveCodexAppServerForOpenClawToolPolicy,
@@ -283,6 +284,12 @@ import { resolveCodexWebSearchPlan } from "./web-search.js";
 
 const CODEX_NATIVE_HOOK_RELAY_RENEW_INTERVAL_MS = 60_000;
 const CODEX_APP_SERVER_PROJECTED_CHARS_PER_TOKEN = 4;
+const CODEX_APP_SERVER_OPENCLAW_ENV_VARS = new Set([
+  "OPENCLAW_SHELL",
+  "OPENCLAW_AGENT_ID",
+  "OPENCLAW_SESSION_KEY",
+  "OPENCLAW_SESSION_ID",
+]);
 
 function shouldKeepCodexSharedAbortOpen(params: {
   trigger: EmbeddedRunAttemptParams["trigger"];
@@ -300,6 +307,30 @@ function shouldKeepCodexSharedAbortOpen(params: {
 }
 
 const ensuredCodexWorkspaceDirs = new Set<string>();
+
+function withCodexAppServerOpenClawRuntimeEnv(
+  appServer: CodexAppServerRuntimeOptions,
+  params: Pick<EmbeddedRunAttemptParams, "agentId" | "sessionKey" | "sessionId">,
+): CodexAppServerRuntimeOptions {
+  return {
+    ...appServer,
+    start: {
+      ...appServer.start,
+      env: {
+        ...appServer.start.env,
+        ...resolveOpenClawRuntimeEnv({
+          shell: "codex-app-server",
+          agentId: params.agentId,
+          sessionKey: params.sessionKey,
+          sessionId: params.sessionId,
+        }),
+      },
+      clearEnv: appServer.start.clearEnv?.filter(
+        (key) => !CODEX_APP_SERVER_OPENCLAW_ENV_VARS.has(key),
+      ),
+    },
+  };
+}
 
 function withCodexAppServerFastModeServiceTier(
   appServer: CodexAppServerRuntimeOptions,
@@ -598,6 +629,7 @@ export async function runCodexAppServerAttempt(
     });
   }
   preDynamicStartupStages.mark("app-server-policy");
+  appServer = withCodexAppServerOpenClawRuntimeEnv(appServer, params);
   let pluginAppServer: CodexAppServerRuntimeOptions = appServer;
   let nativeHookRelayEvents = resolveCodexNativeHookRelayEvents({
     configuredEvents: options.nativeHookRelay?.events,

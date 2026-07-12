@@ -74,9 +74,67 @@ function workspaceFileIdentity(stat: syncFs.Stats, canonicalPath: string): strin
   return `${canonicalPath}|${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
 }
 
+function resolveProfileWorkspaceSharedRoot(workspaceDir: string): string | null {
+  const resolvedWorkspaceDir = resolveUserPath(workspaceDir);
+  const baseName = path.basename(resolvedWorkspaceDir);
+  if (!/^workspace-[^/]+$/u.test(baseName)) {
+    return null;
+  }
+  const sharedWorkspaceDir = path.resolve(resolvedWorkspaceDir, "..", "workspace");
+  if (sharedWorkspaceDir === resolvedWorkspaceDir) {
+    return null;
+  }
+  return sharedWorkspaceDir;
+}
+
+function buildBootstrapBoundaryRoots(params: {
+  workspaceDir: string;
+  additionalBoundaryRoots?: string[];
+}): string[] {
+  const roots = [params.workspaceDir, ...(params.additionalBoundaryRoots ?? [])]
+    .map((candidate) => resolveUserPath(candidate))
+    .filter((candidate) => candidate.length > 0);
+  return Array.from(new Set(roots));
+}
+
+async function openWorkspaceBootstrapFile(params: {
+  filePath: string;
+  workspaceDir: string;
+  additionalBoundaryRoots?: string[];
+}) {
+  const [primaryRoot, ...fallbackRoots] = buildBootstrapBoundaryRoots({
+    workspaceDir: params.workspaceDir,
+    additionalBoundaryRoots: params.additionalBoundaryRoots,
+  });
+
+  let opened = await openRootFile({
+    absolutePath: params.filePath,
+    rootPath: primaryRoot,
+    boundaryLabel: "workspace root",
+    maxBytes: MAX_WORKSPACE_BOOTSTRAP_FILE_BYTES,
+  });
+
+  if (!opened.ok && opened.reason === "validation") {
+    for (const fallbackRoot of fallbackRoots) {
+      const fallback = await openRootFile({
+        absolutePath: params.filePath,
+        rootPath: fallbackRoot,
+        boundaryLabel: "workspace root",
+        maxBytes: MAX_WORKSPACE_BOOTSTRAP_FILE_BYTES,
+      });
+      if (fallback.ok) {
+        opened = fallback;
+        break;
+      }
+    }
+  }
+  return opened;
+}
+
 async function readWorkspaceFileWithGuards(params: {
   filePath: string;
   workspaceDir: string;
+  additionalBoundaryRoots?: string[];
 }): Promise<WorkspaceGuardedReadResult> {
   try {
     // A transient FS race (EAGAIN/EWOULDBLOCK/EINTR under load) on the open or
@@ -87,11 +145,10 @@ async function readWorkspaceFileWithGuards(params: {
     // in openRootFile still protects against a swapped file between attempts.
     return await retryAsync(
       async () => {
-        const opened = await openRootFile({
-          absolutePath: params.filePath,
-          rootPath: params.workspaceDir,
-          boundaryLabel: "workspace root",
-          maxBytes: MAX_WORKSPACE_BOOTSTRAP_FILE_BYTES,
+        const opened = await openWorkspaceBootstrapFile({
+          filePath: params.filePath,
+          workspaceDir: params.workspaceDir,
+          additionalBoundaryRoots: params.additionalBoundaryRoots,
         });
         if (!opened.ok) {
           // Boundary resolution can report transient IO as "validation", while
@@ -1113,6 +1170,8 @@ export async function loadWorkspaceBootstrapFiles(dir: string): Promise<Workspac
     },
   ];
 
+  const sharedWorkspaceRoot = resolveProfileWorkspaceSharedRoot(resolvedDir);
+  const additionalBoundaryRoots = sharedWorkspaceRoot ? [sharedWorkspaceRoot] : [];
   const result: WorkspaceBootstrapFile[] = [];
   for (const entry of entries) {
     if (
@@ -1124,6 +1183,7 @@ export async function loadWorkspaceBootstrapFiles(dir: string): Promise<Workspac
     const loaded = await readWorkspaceFileWithGuards({
       filePath: entry.filePath,
       workspaceDir: resolvedDir,
+      additionalBoundaryRoots,
     });
     if (loaded.ok) {
       result.push({
@@ -1280,6 +1340,8 @@ export async function loadExtraBootstrapFilesWithDiagnostics(
     }
   }
 
+  const sharedWorkspaceRoot = resolveProfileWorkspaceSharedRoot(resolvedDir);
+  const additionalBoundaryRoots = sharedWorkspaceRoot ? [sharedWorkspaceRoot] : [];
   const files: WorkspaceBootstrapFile[] = [];
   const diagnostics: ExtraBootstrapLoadDiagnostic[] = [];
   for (const relPath of resolvedPaths) {
@@ -1297,6 +1359,7 @@ export async function loadExtraBootstrapFilesWithDiagnostics(
     const loaded = await readWorkspaceFileWithGuards({
       filePath,
       workspaceDir: resolvedDir,
+      additionalBoundaryRoots,
     });
     if (loaded.ok) {
       files.push({

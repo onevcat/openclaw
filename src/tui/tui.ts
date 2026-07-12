@@ -1434,6 +1434,9 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
     tui,
     openOverlay,
     closeOverlay,
+    agentId: () => state.currentAgentId || undefined,
+    sessionKey: () => state.currentSessionKey || undefined,
+    sessionId: () => state.currentSessionId || undefined,
   });
   updateAutocompleteProvider();
   const canSubmitChatMessage = (message: string) =>
