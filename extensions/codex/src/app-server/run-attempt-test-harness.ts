@@ -16,6 +16,7 @@ import { resolvePreferredOpenClawTmpDir } from "openclaw/plugin-sdk/temp-path";
 import { afterEach, beforeEach, expect, vi } from "vitest";
 import { defaultCodexAppInventoryCache } from "./app-inventory-cache.js";
 import type { CodexAppServerClient } from "./client.js";
+import type { CodexAppServerStartOptions } from "./config.js";
 import { createCodexDynamicToolBridge } from "./dynamic-tools.js";
 import type { CodexServerNotification } from "./protocol.js";
 import {
@@ -361,7 +362,11 @@ export function createAppServerHarness(
     options?: { signal?: AbortSignal },
   ) => Promise<unknown>,
   options: {
-    onStart?: (authProfileId: string | undefined, agentDir: string | undefined) => void;
+    onStart?: (
+      authProfileId: string | undefined,
+      agentDir: string | undefined,
+      startOptions: CodexAppServerStartOptions,
+    ) => void;
   } = {},
 ) {
   const requests: Array<{ method: string; params: unknown }> = [];
@@ -393,8 +398,8 @@ export function createAppServerHarness(
       return () => closeHandlers.delete(handler);
     },
   } as unknown as CodexAppServerClient;
-  setCodexAppServerClientFactoryForTest(async (_startOptions, authProfileId, agentDir) => {
-    options.onStart?.(authProfileId, agentDir);
+  setCodexAppServerClientFactoryForTest(async (startOptions, authProfileId, agentDir) => {
+    options.onStart?.(authProfileId, agentDir, startOptions);
     return client;
   });
 

@@ -8,6 +8,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { PluginInstallRecord } from "../config/types.plugins.js";
+import { resolveBundledPluginSources } from "../plugins/bundled-sources.js";
 import { enablePluginInConfig } from "../plugins/enable.js";
 import { loadInstalledPluginIndexInstallRecords } from "../plugins/installed-plugin-index-records.js";
 import type { RuntimeEnv } from "../runtime.js";
@@ -20,6 +21,12 @@ export type RuntimePluginInstallDescriptor = {
   label: string;
   npmSpec: string;
   warningLabel: string;
+  /**
+   * Prefer the host-bundled implementation when it is available. This keeps
+   * runtime plugins that carry local host patches from being replaced by an
+   * independently managed npm install during model selection.
+   */
+  preferBundled?: boolean;
 };
 
 /** Result returned after ensuring a runtime plugin for a selected model. */
@@ -85,6 +92,23 @@ async function ensureRuntimePluginForModelSelection(params: {
       installed: false,
     };
   }
+  if (params.descriptor.preferBundled) {
+    const bundled = resolveBundledPluginSources({ workspaceDir: params.workspaceDir });
+    if (bundled.has(params.descriptor.pluginId)) {
+      const enableResult = enablePluginInConfig(params.cfg, params.descriptor.pluginId);
+      if (!enableResult.enabled) {
+        params.runtime.log?.(
+          `${params.descriptor.label} bundled runtime is available but could not be enabled: ${enableResult.reason ?? "unknown reason"}.`,
+        );
+      }
+      return {
+        cfg: enableResult.enabled ? enableResult.config : params.cfg,
+        required: true,
+        installed: enableResult.enabled,
+        status: enableResult.enabled ? "installed" : "failed",
+      };
+    }
+  }
   const existingRecords = await loadInstalledPluginIndexInstallRecords({ env: process.env });
   if (isInstalledRecordPresentOnDisk(existingRecords[params.descriptor.pluginId], process.env)) {
     // A recorded install with package.json on disk can be repaired/enabled
@@ -103,8 +127,19 @@ async function ensureRuntimePluginForModelSelection(params: {
       params.runtime.log?.(`${params.descriptor.warningLabel} update warning: ${warning}`);
     }
     const enableResult = enablePluginInConfig(params.cfg, params.descriptor.pluginId);
+    if (!enableResult.enabled) {
+      params.runtime.log?.(
+        `${params.descriptor.label} runtime is installed but could not be enabled: ${enableResult.reason ?? "unknown reason"}.`,
+      );
+      return {
+        cfg: params.cfg,
+        required: true,
+        installed: false,
+        status: "failed",
+      };
+    }
     return {
-      cfg: enableResult.enabled ? enableResult.config : params.cfg,
+      cfg: enableResult.config,
       required: true,
       installed: true,
       status: "installed",
@@ -149,6 +184,14 @@ async function repairRuntimePluginInstallForModelSelection(params: {
 }): Promise<{ required: boolean; changes: string[]; warnings: string[] }> {
   if (!params.shouldEnsure({ cfg: params.cfg, model: params.model })) {
     return { required: false, changes: [], warnings: [] };
+  }
+  if (params.descriptor.preferBundled) {
+    const bundled = resolveBundledPluginSources({ env: params.env });
+    if (bundled.has(params.descriptor.pluginId)) {
+      // A bundled runtime is already supplied by this host. Do not let a
+      // model-selection repair recreate an independent npm-managed copy.
+      return { required: true, changes: [], warnings: [] };
+    }
   }
   const { repairMissingPluginInstallsForIds } =
     await import("./doctor/shared/missing-configured-plugin-install.js");

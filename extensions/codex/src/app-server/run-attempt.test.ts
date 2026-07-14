@@ -145,6 +145,35 @@ const DISABLED_CODEX_WEB_SEARCH_THREAD_CONFIG_FINGERPRINT = JSON.stringify({
   web_search: "disabled",
 });
 
+describe("Codex app-server OpenClaw runtime envelope", () => {
+  it("reapplies agent context to rebuilt app-server options", () => {
+    const rebuiltAppServer = {
+      start: {
+        transport: "stdio",
+        command: "codex",
+        args: ["app-server"],
+        env: { CUSTOM_VALUE: "kept" },
+        clearEnv: ["OPENCLAW_AGENT_ID", "UNRELATED_VALUE"],
+      },
+    } as Parameters<typeof testing.withCodexAppServerOpenClawRuntimeEnv>[0];
+
+    const result = testing.withCodexAppServerOpenClawRuntimeEnv(rebuiltAppServer, {
+      agentId: "main",
+      sessionKey: "agent:main:discord:default:direct:onevcat",
+      sessionId: "session-123",
+    });
+
+    expect(result.start.env).toMatchObject({
+      CUSTOM_VALUE: "kept",
+      OPENCLAW_SHELL: "codex-app-server",
+      OPENCLAW_AGENT_ID: "main",
+      OPENCLAW_SESSION_KEY: "agent:main:discord:default:direct:onevcat",
+      OPENCLAW_SESSION_ID: "session-123",
+    });
+    expect(result.start.clearEnv).toEqual(["UNRELATED_VALUE"]);
+  });
+});
+
 async function writeExistingBinding(
   sessionFile: string,
   workspaceDir: string,
@@ -4896,10 +4925,12 @@ describe("runCodexAppServerAttempt", () => {
   it("passes the selected auth profile into app-server startup", async () => {
     const seenAuthProfileIds: Array<string | undefined> = [];
     const seenAgentDirs: Array<string | undefined> = [];
+    const seenStartEnvs: Array<Record<string, string> | undefined> = [];
     const { requests, waitForMethod, completeTurn } = createStartedThreadHarness(undefined, {
-      onStart: (authProfileId, agentDir) => {
+      onStart: (authProfileId, agentDir, startOptions) => {
         seenAuthProfileIds.push(authProfileId);
         seenAgentDirs.push(agentDir);
+        seenStartEnvs.push(startOptions.env);
       },
     });
     const params = createParams(
@@ -4922,6 +4953,14 @@ describe("runCodexAppServerAttempt", () => {
 
     expect(seenAuthProfileIds).toEqual(["openai:work"]);
     expect(seenAgentDirs).toEqual([path.join(tempDir, "agent")]);
+    expect(seenStartEnvs).toEqual([
+      expect.objectContaining({
+        OPENCLAW_SHELL: "codex-app-server",
+        OPENCLAW_AGENT_ID: "main",
+        OPENCLAW_SESSION_KEY: "agent:main:session-1",
+        OPENCLAW_SESSION_ID: "session-1",
+      }),
+    ]);
     expect(requests.map((entry) => entry.method)).toContain("turn/start");
   });
 

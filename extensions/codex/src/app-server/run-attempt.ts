@@ -727,6 +727,11 @@ export async function runCodexAppServerAttempt(
     env: process.env,
     agentDir,
   });
+  // The startup binding can change the selected model/provider, which rebuilds
+  // the app-server options above. Reapply the OpenClaw runtime envelope after
+  // that rebuild: otherwise the later start path receives a fresh `start.env`
+  // without the agent/session markers injected earlier in this attempt.
+  appServer = withCodexAppServerOpenClawRuntimeEnv(appServer, params);
   pluginAppServer = appServer;
   nativeHookRelayEvents = resolveCodexNativeHookRelayEvents({
     configuredEvents: options.nativeHookRelay?.events,
@@ -3923,6 +3928,7 @@ function resolveCodexDynamicToolDirectNames(params: EmbeddedRunAttemptParams): s
 }
 
 export const testing = {
+  withCodexAppServerOpenClawRuntimeEnv,
   buildCodexNativeHookRelayId,
   buildDeveloperInstructions,
   filterCodexDynamicTools,

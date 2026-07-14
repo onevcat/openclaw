@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   repairMissingPluginInstallsForIds: vi.fn(),
+  resolveBundledPluginSources: vi.fn(),
 }));
 
 type MissingPluginInstallRepairCall = {
@@ -25,9 +26,14 @@ vi.mock("./doctor/shared/missing-configured-plugin-install.js", () => ({
   repairMissingPluginInstallsForIds: mocks.repairMissingPluginInstallsForIds,
 }));
 
+vi.mock("../plugins/bundled-sources.js", () => ({
+  resolveBundledPluginSources: mocks.resolveBundledPluginSources,
+}));
+
 describe("Codex runtime plugin install repair", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.resolveBundledPluginSources.mockReturnValue(new Map());
     mocks.repairMissingPluginInstallsForIds.mockResolvedValue({
       changes: [],
       warnings: [],

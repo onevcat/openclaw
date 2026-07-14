@@ -10,6 +10,7 @@ const CODEX_RUNTIME_PLUGIN_DESCRIPTOR = {
   label: CODEX_RUNTIME_PLUGIN_LABEL,
   npmSpec: CODEX_RUNTIME_PLUGIN_NPM_SPEC,
   warningLabel: CODEX_RUNTIME_PLUGIN_LABEL,
+  preferBundled: true,
 };
 
 const codexRuntimePluginInstall = createRuntimePluginModelSelectionHelpers({
