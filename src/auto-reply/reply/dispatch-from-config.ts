@@ -91,7 +91,10 @@ import {
   toPluginConversationBinding,
 } from "../../plugins/conversation-binding.js";
 import { getGlobalHookRunner, getGlobalPluginRegistry } from "../../plugins/hook-runner-global.js";
-import type { PluginHookReplyDispatchEvent } from "../../plugins/hook-types.js";
+import type {
+  PluginHookInboundClaimResult,
+  PluginHookReplyDispatchEvent,
+} from "../../plugins/hook-types.js";
 import { isAcpSessionKey } from "../../routing/session-key.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import type { SessionWorkAdmissionLease } from "../../sessions/session-lifecycle-admission.js";
@@ -2904,6 +2907,71 @@ export async function dispatchReplyFromConfig(
         routedFinalCount: 0,
       };
     };
+
+    // Plugin-owned conversation bindings get the targeted claim path above.
+    // All other routes, including configured ACP sessions, offer the inbound
+    // turn to global claim handlers before commands, ACP, or model dispatch.
+    if (!pluginOwnedBinding && hookRunner?.hasHooks("inbound_claim")) {
+      let inboundClaimResult: PluginHookInboundClaimResult | undefined;
+      try {
+        await prepareHookMediaMetadata();
+        if (isPreDispatchOperationAborted()) {
+          return finishReplyOperationAbortedDispatch();
+        }
+        const inboundAuthorization = resolveCommandAuthorization({
+          ctx,
+          cfg,
+          commandAuthorized: ctx.CommandAuthorized,
+        });
+        inboundClaimResult = await traceReplyPhase("reply.inbound_claim_hooks", () =>
+          runWithDispatchLifecycleAdmission(
+            async () =>
+              await runWithDispatchAbortSignal(
+                getPreDispatchAbortSignal(),
+                () =>
+                  hookRunner.runInboundClaim(
+                    {
+                      ...inboundClaimEvent,
+                      senderIsOwner: inboundAuthorization.senderIsOwner,
+                    },
+                    inboundClaimContext,
+                  ),
+                trackDispatchLifecycleWork,
+              ),
+          ),
+        );
+      } catch (err) {
+        if (isDispatchReplyOperationAbortedError(err)) {
+          throw err;
+        }
+        logVerbose(
+          `dispatch-from-config: global inbound claim failed open: ${formatErrorMessage(err)}`,
+        );
+      }
+
+      if (isPreDispatchOperationAborted()) {
+        return finishReplyOperationAbortedDispatch();
+      }
+      if (inboundClaimResult?.handled) {
+        let queuedFinal = false;
+        let routedFinalCount = 0;
+        if (inboundClaimResult.reply && !suppressDelivery) {
+          const handledReply = await sendFinalPayload(inboundClaimResult.reply, {
+            abortSignal: getPreDispatchAbortSignal(),
+            deliveryId: "inbound-claim",
+          });
+          queuedFinal = handledReply.queuedFinal;
+          routedFinalCount += handledReply.routedFinalCount;
+        }
+        const counts = dispatcher.getQueuedCounts();
+        counts.final += routedFinalCount;
+        recordProcessed("completed", { reason: "inbound_claim_handled" });
+        markIdle("message_completed");
+        commitInboundDedupeIfClaimed();
+        completeDispatchReplyOperation();
+        return attachSourceReplyDeliveryMode({ queuedFinal, counts });
+      }
+    }
 
     // Run before_dispatch hook — let plugins inspect or handle before model dispatch.
     if (hookRunner?.hasHooks("before_dispatch")) {

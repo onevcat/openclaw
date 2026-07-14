@@ -6203,6 +6203,82 @@ describe("dispatchReplyFromConfig", () => {
     expect(replyResolver).toHaveBeenCalled();
   });
 
+  it("lets a global inbound claim handle a configured ACP session before ACP dispatch", async () => {
+    setNoAbort();
+    hookMocks.runner.hasHooks.mockImplementation(
+      ((hookName?: string) =>
+        hookName === "inbound_claim" || hookName === "reply_dispatch") as () => boolean,
+    );
+    hookMocks.runner.runInboundClaim.mockResolvedValue({
+      handled: true,
+      reply: { text: "Relay recorded the decision." },
+    } as never);
+    const runtime = createAcpRuntime([
+      { type: "text_delta", text: "ACP should not run" },
+      { type: "done" },
+    ]);
+    acpMocks.readAcpSessionEntry.mockReturnValue({
+      sessionKey: "agent:claude:acp:binding:discord:onevtail",
+      storeSessionKey: "agent:claude:acp:binding:discord:onevtail",
+      cfg: {},
+      storePath: "/tmp/mock-sessions.json",
+      entry: {},
+      acp: {
+        backend: "acpx",
+        agent: "claude",
+        runtimeSessionName: "onevtail-claude",
+        mode: "persistent",
+        state: "idle",
+        lastActivityAt: Date.now(),
+      },
+    });
+    acpMocks.requireAcpRuntimeBackend.mockReturnValue({ id: "acpx", runtime });
+    const dispatcher = createDispatcher();
+    const replyResolver = vi.fn(async () => ({ text: "fallback" }) satisfies ReplyPayload);
+    const ctx = buildTestCtx({
+      Provider: "discord",
+      Surface: "discord",
+      OriginatingChannel: "discord",
+      OriginatingTo: "discord:user:owner-1",
+      To: "discord:user:owner-1",
+      AccountId: "onevtail",
+      SenderId: "owner-1",
+      OwnerAllowFrom: ["owner-1"],
+      CommandAuthorized: true,
+      MessageSid: "discord-inbound-1",
+      ReplyToId: "relay-outbound-1",
+      SessionKey: "agent:claude:acp:binding:discord:onevtail",
+      BodyForAgent: "approve",
+      Body: "approve",
+    });
+
+    await dispatchReplyFromConfig({
+      ctx,
+      cfg: {
+        acp: {
+          enabled: true,
+          dispatch: { enabled: true },
+          stream: { deliveryMode: "live", coalesceIdleMs: 0, maxChunkChars: 128 },
+        },
+      } as OpenClawConfig,
+      dispatcher,
+      replyResolver,
+    });
+
+    const [event] = firstMockCall(hookMocks.runner.runInboundClaim, "ACP inbound claim") as
+      | [{ accountId?: unknown; replyToId?: unknown; senderIsOwner?: unknown }]
+      | [];
+    expect(event?.accountId).toBe("onevtail");
+    expect(event?.replyToId).toBe("relay-outbound-1");
+    expect(event?.senderIsOwner).toBe(true);
+    expect(hookMocks.runner.runReplyDispatch).not.toHaveBeenCalled();
+    expect(runtime.ensureSession).not.toHaveBeenCalled();
+    expect(runtime.runTurn).not.toHaveBeenCalled();
+    expect(replyResolver).not.toHaveBeenCalled();
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledTimes(1);
+    expect(firstFinalReplyPayload(dispatcher)?.text).toBe("Relay recorded the decision.");
+  });
+
   it("retargets reply_dispatch to a bound generic ACP session before model fallback", async () => {
     setNoAbort();
     const sourceSessionKey = "agent:main:discord:C123";
@@ -6974,68 +7050,121 @@ describe("dispatchReplyFromConfig", () => {
     expect(internalHookMocks.triggerInternalHook).not.toHaveBeenCalled();
   });
 
-  it("does not broadcast inbound claims without a core-owned plugin binding", async () => {
+  it("lets a global inbound claim handle an ordinary Discord route before model dispatch", async () => {
     setNoAbort();
     hookMocks.runner.hasHooks.mockImplementation(
       ((hookName?: string) =>
         hookName === "inbound_claim" || hookName === "message_received") as () => boolean,
     );
-    hookMocks.runner.runInboundClaim.mockResolvedValue({ handled: true } as never);
+    hookMocks.runner.runInboundClaim.mockResolvedValue({
+      handled: true,
+      reply: { text: "claimed reply" },
+    } as never);
     const cfg = emptyConfig;
     const dispatcher = createDispatcher();
     const ctx = buildTestCtx({
-      Provider: "telegram",
-      Surface: "telegram",
-      OriginatingChannel: "telegram",
-      OriginatingTo: "telegram:-10099",
-      To: "telegram:-10099",
+      Provider: "discord",
+      Surface: "discord",
+      OriginatingChannel: "discord",
+      OriginatingTo: "discord:user:user-9",
+      To: "discord:user:user-9",
       AccountId: "default",
       SenderId: "user-9",
       SenderUsername: "ada",
-      MessageThreadId: 77,
+      OwnerAllowFrom: ["user-9"],
       CommandAuthorized: true,
       WasMentioned: true,
       CommandBody: "who are you",
       RawBody: "who are you",
       Body: "who are you",
       MessageSid: "msg-claim-1",
-      SessionKey: "agent:main:hook-test",
+      ReplyToId: "outbound-1",
+      SessionKey: "agent:main:discord:direct:user-9",
     });
     const replyResolver = vi.fn(async () => ({ text: "core reply" }) satisfies ReplyPayload);
 
     const result = await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
 
     expect(result).toEqual({ queuedFinal: true, counts: { tool: 0, block: 0, final: 0 } });
-    expect(hookMocks.runner.runInboundClaim).not.toHaveBeenCalled();
     const [event, hookContext] = firstMockCall(
-      hookMocks.runner.runMessageReceived,
-      "message received hook",
+      hookMocks.runner.runInboundClaim,
+      "global inbound claim",
     ) as
       | [
-          { content?: unknown; from?: unknown; metadata?: Record<string, unknown> },
-          { accountId?: unknown; channelId?: unknown; conversationId?: unknown },
+          {
+            accountId?: unknown;
+            channel?: unknown;
+            content?: unknown;
+            messageId?: unknown;
+            replyToId?: unknown;
+            senderIsOwner?: unknown;
+          },
+          { accountId?: unknown; channelId?: unknown; sessionKey?: unknown },
         ]
       | [];
-    expect(event?.from).toBe(ctx.From);
+    expect(event?.channel).toBe("discord");
+    expect(event?.accountId).toBe("default");
     expect(event?.content).toBe("who are you");
-    expect(event?.metadata?.messageId).toBe("msg-claim-1");
-    expect(event?.metadata?.originatingChannel).toBe("telegram");
-    expect(event?.metadata?.originatingTo).toBe("telegram:-10099");
-    expect(event?.metadata?.senderId).toBe("user-9");
-    expect(event?.metadata?.senderUsername).toBe("ada");
-    expect(event?.metadata?.threadId).toBe(77);
-    expect(hookContext?.channelId).toBe("telegram");
+    expect(event?.messageId).toBe("msg-claim-1");
+    expect(event?.replyToId).toBe("outbound-1");
+    expect(event?.senderIsOwner).toBe(true);
+    expect(hookContext?.channelId).toBe("discord");
     expect(hookContext?.accountId).toBe("default");
-    expect(hookContext?.conversationId).toBe("telegram:-10099");
-    const internalHookEvent = (
-      internalHookMocks.triggerInternalHook.mock.calls as unknown as Array<
-        [{ action?: unknown; sessionKey?: unknown; type?: unknown }]
-      >
-    )[0]?.[0];
-    expect(internalHookEvent?.type).toBe("message");
-    expect(internalHookEvent?.action).toBe("received");
-    expect(internalHookEvent?.sessionKey).toBe("agent:main:hook-test");
-    expect(replyResolver).toHaveBeenCalledTimes(1);
+    expect(hookContext?.sessionKey).toBe("agent:main:discord:direct:user-9");
+    expect(replyResolver).not.toHaveBeenCalled();
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledTimes(1);
+    expect(firstFinalReplyPayload(dispatcher)?.text).toBe("claimed reply");
+  });
+
+  it("continues ordinary dispatch when a global inbound claim declines", async () => {
+    setNoAbort();
+    hookMocks.runner.hasHooks.mockImplementation(
+      ((hookName?: string) => hookName === "inbound_claim") as () => boolean,
+    );
+    hookMocks.runner.runInboundClaim.mockResolvedValue(undefined);
+    const dispatcher = createDispatcher();
+    const replyResolver = vi.fn(async () => ({ text: "core reply" }) satisfies ReplyPayload);
+
+    await dispatchReplyFromConfig({
+      ctx: buildTestCtx({
+        Provider: "discord",
+        Surface: "discord",
+        SenderId: "user-9",
+        OwnerAllowFrom: ["user-9"],
+        Body: "not for relay",
+      }),
+      cfg: emptyConfig,
+      dispatcher,
+      replyResolver,
+    });
+
+    expect(hookMocks.runner.runInboundClaim).toHaveBeenCalledOnce();
+    expect(replyResolver).toHaveBeenCalledOnce();
+    expect(firstFinalReplyPayload(dispatcher)?.text).toBe("core reply");
+  });
+
+  it("fails open when the global inbound claim runner rejects", async () => {
+    setNoAbort();
+    globalMocks.logVerbose.mockClear();
+    hookMocks.runner.hasHooks.mockImplementation(
+      ((hookName?: string) => hookName === "inbound_claim") as () => boolean,
+    );
+    hookMocks.runner.runInboundClaim.mockRejectedValueOnce(new Error("claim failed"));
+    const dispatcher = createDispatcher();
+    const replyResolver = vi.fn(async () => ({ text: "core reply" }) satisfies ReplyPayload);
+
+    await dispatchReplyFromConfig({
+      ctx: buildTestCtx({ Provider: "discord", Surface: "discord", Body: "hello" }),
+      cfg: emptyConfig,
+      dispatcher,
+      replyResolver,
+    });
+
+    expect(hookMocks.runner.runInboundClaim).toHaveBeenCalledOnce();
+    expect(globalMocks.logVerbose).toHaveBeenCalledWith(
+      "dispatch-from-config: global inbound claim failed open: claim failed",
+    );
+    expect(replyResolver).toHaveBeenCalledOnce();
     expect(firstFinalReplyPayload(dispatcher)?.text).toBe("core reply");
   });
 

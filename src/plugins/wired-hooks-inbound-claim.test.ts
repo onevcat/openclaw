@@ -98,6 +98,37 @@ describe("inbound_claim hook runner", () => {
     expect(succeeding).toHaveBeenCalledTimes(1);
   });
 
+  it("continues to the next handler when a higher-priority handler times out", async () => {
+    vi.useFakeTimers();
+    try {
+      const logger = {
+        warn: vi.fn(),
+        error: vi.fn(),
+      };
+      const slow = vi.fn(() => new Promise(() => {}));
+      const succeeding = vi.fn().mockResolvedValue({ handled: true });
+      const { registry, runner } = createHookRunnerWithRegistry(
+        [
+          { hookName: "inbound_claim", handler: slow },
+          { hookName: "inbound_claim", handler: succeeding },
+        ],
+        { logger },
+      );
+      registry.typedHooks[0].timeoutMs = 5;
+
+      const run = runner.runInboundClaim(inboundClaimEvent, inboundClaimCtx);
+      await vi.advanceTimersByTimeAsync(5);
+
+      await expect(run).resolves.toEqual({ handled: true });
+      expectFirstErrorLog(logger, [
+        "[hooks] inbound_claim handler from test-plugin failed: timed out after 5ms",
+      ]);
+      expect(succeeding).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("can target a single plugin when core already owns the binding", async () => {
     const first = vi.fn().mockResolvedValue({ handled: true });
     const second = vi.fn().mockResolvedValue({ handled: true });
