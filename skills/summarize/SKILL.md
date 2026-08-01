@@ -78,7 +78,7 @@ Default model is `auto`; config may choose the provider/model.
 Optional config file: `~/.summarize/config.json`
 
 ```json
-{ "model": "openai/gpt-5.2" }
+{ "model": "openai/gpt-5.6-terra" }
 ```
 
 Optional services:

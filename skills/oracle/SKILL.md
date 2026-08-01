@@ -28,13 +28,13 @@ Oracle bundles a prompt + selected files for one second-model pass. Treat output
 
 ## Main path
 
-Current CLI default model: `gpt-5.5-pro`. Browser engine is useful for long ChatGPT Pro runs; API engine is useful when `OPENAI_API_KEY` or Azure config is ready.
+Current CLI default model: `gpt-5.6-terra`. Browser engine is useful for long ChatGPT Pro runs; API engine is useful when `OPENAI_API_KEY` or Azure config is ready.
 
 Recommended defaults:
 
 - Preview first: `--dry-run summary --files-report`
-- Browser long run: `--engine browser --model gpt-5.5-pro`
-- API explicit: `--engine api --model gpt-5.5`
+- Browser long run: `--engine browser --model gpt-5.6-terra`
+- API explicit: `--engine api --model gpt-5.6-terra`
 
 ## Golden path
 
@@ -57,7 +57,7 @@ Recommended defaults:
   - `oracle --dry-run summary --files-report -p "<task>" --file "src/**"`
 
 - Browser run (main path; long-running is normal):
-  - `oracle --engine browser --model gpt-5.5-pro -p "<task>" --file "src/**"`
+  - `oracle --engine browser --model gpt-5.6-terra -p "<task>" --file "src/**"`
 
 - Manual paste fallback:
   - `oracle --render --copy -p "<task>" --file "src/**"`
