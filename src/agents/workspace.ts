@@ -135,6 +135,34 @@ export function workspaceFilesShareSourceIdentity(left: object, right: object): 
   );
 }
 
+function resolveProfileWorkspaceSharedRoot(workspaceDir: string): string | undefined {
+  const resolvedWorkspaceDir = resolveUserPath(workspaceDir);
+  if (!/^workspace-[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(path.basename(resolvedWorkspaceDir))) {
+    return undefined;
+  }
+  return path.resolve(resolvedWorkspaceDir, "..", "workspace");
+}
+
+async function openWorkspaceBootstrapFile(params: { filePath: string; workspaceDir: string }) {
+  const opened = await openRootFileFollowingParents({
+    absolutePath: params.filePath,
+    rootPath: params.workspaceDir,
+    boundaryLabel: "workspace root",
+  });
+  if (opened.ok || opened.reason !== "validation") {
+    return opened;
+  }
+  const sharedRoot = resolveProfileWorkspaceSharedRoot(params.workspaceDir);
+  if (!sharedRoot) {
+    return opened;
+  }
+  return await openRootFileFollowingParents({
+    absolutePath: params.filePath,
+    rootPath: sharedRoot,
+    boundaryLabel: "shared workspace root",
+  });
+}
+
 async function readWorkspaceFileWithGuards(params: {
   filePath: string;
   workspaceDir: string;
@@ -149,11 +177,7 @@ async function readWorkspaceFileWithGuards(params: {
     // in openRootFile still protects against a swapped file between attempts.
     return await retryAsync(
       async () => {
-        const opened = await openRootFileFollowingParents({
-          absolutePath: params.filePath,
-          rootPath: params.workspaceDir,
-          boundaryLabel: "workspace root",
-        });
+        const opened = await openWorkspaceBootstrapFile(params);
         if (!opened.ok) {
           // Boundary resolution can report transient IO as "validation", while
           // pinned open failures use "io". Classify the underlying error so
