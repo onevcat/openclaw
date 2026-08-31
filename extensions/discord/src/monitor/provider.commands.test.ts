@@ -121,9 +121,13 @@ describe("resolveDiscordProviderCommandSpecs", () => {
     resetPluginRuntimeStateForTest();
   });
 
-  it("scopes native skills to the default agent for the default account", async () => {
+  it("scopes native skills to the bound agent for an explicit-ownership default account", async () => {
     const config: OpenClawConfig = {
-      agents: { list: [{ id: "main", default: true }, { id: "onevpaw" }] },
+      agents: {
+        ownership: "explicit",
+        entries: { main: {}, onevpaw: {} },
+      },
+      bindings: [{ agentId: "main", match: { channel: "discord", accountId: "default" } }],
     };
     const harness = createResolverHarness({
       config,
@@ -141,7 +145,10 @@ describe("resolveDiscordProviderCommandSpecs", () => {
 
   it("scopes native skills to the agent matching a named account", async () => {
     const config: OpenClawConfig = {
-      agents: { list: [{ id: "main", default: true }, { id: "onevpaw" }] },
+      agents: {
+        ownership: "explicit",
+        entries: { main: {}, onevpaw: {} },
+      },
     };
     const harness = createResolverHarness({
       config,
