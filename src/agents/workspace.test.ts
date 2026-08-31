@@ -990,6 +990,51 @@ describe("loadWorkspaceBootstrapFiles", () => {
     expect(getMemoryEntries(files)).toHaveLength(0);
   });
 
+  it("loads profile bootstrap symlinks from the exact sibling shared workspace", async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-workspace-shared-"));
+    try {
+      const sharedDir = path.join(rootDir, "workspace");
+      const profileDir = path.join(rootDir, "workspace-onevpaw");
+      await fs.mkdir(sharedDir, { recursive: true });
+      await fs.mkdir(profileDir, { recursive: true });
+      await fs.writeFile(path.join(sharedDir, DEFAULT_AGENTS_FILENAME), "shared instructions\n");
+      await fs.symlink(
+        path.join("..", "workspace", DEFAULT_AGENTS_FILENAME),
+        path.join(profileDir, DEFAULT_AGENTS_FILENAME),
+      );
+
+      const files = await loadWorkspaceBootstrapFiles(profileDir);
+
+      expect(files.find((file) => file.name === DEFAULT_AGENTS_FILENAME)?.content).toBe(
+        "shared instructions\n",
+      );
+    } finally {
+      await fs.rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects profile bootstrap symlinks outside the exact shared workspace", async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-workspace-shared-escape-"));
+    try {
+      const profileDir = path.join(rootDir, "workspace-onevpaw");
+      const outsideDir = path.join(rootDir, "outside");
+      await fs.mkdir(profileDir, { recursive: true });
+      await fs.mkdir(outsideDir, { recursive: true });
+      await fs.writeFile(path.join(outsideDir, DEFAULT_AGENTS_FILENAME), "outside\n");
+      await fs.symlink(
+        path.join("..", "outside", DEFAULT_AGENTS_FILENAME),
+        path.join(profileDir, DEFAULT_AGENTS_FILENAME),
+      );
+
+      const files = await loadWorkspaceBootstrapFiles(profileDir);
+      const agents = files.find((file) => file.name === DEFAULT_AGENTS_FILENAME);
+
+      expect(agents?.content).toMatch(/^\[UNREADABLE:/u);
+    } finally {
+      await fs.rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
   it("treats hardlinked bootstrap aliases as unreadable", async () => {
     if (process.platform === "win32") {
       return;
