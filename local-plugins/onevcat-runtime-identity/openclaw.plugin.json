@@ -1,0 +1,13 @@
+{
+  "id": "onevcat-runtime-identity",
+  "activation": {
+    "onStartup": true
+  },
+  "name": "onevcat Runtime Identity",
+  "description": "Projects OpenClaw execution identity into local exec environments.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
