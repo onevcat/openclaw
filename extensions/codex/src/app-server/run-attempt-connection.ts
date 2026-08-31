@@ -121,16 +121,16 @@ export async function prepareCodexAttemptConnection({ params, options }: CodexRu
   const agentDir = params.agentDir ?? resolveAgentDir(params.config ?? {}, sessionAgentId);
   const preparedEnvironment = params.hostCapabilities.preparedEnvironment?.();
   const remoteExec = isCodexRemoteExecPlacementSandbox(sandbox);
-  const preparedShellEnvironment = preparedEnvironment
-    ? {
-        ...preparedEnvironment.credentialScrubEnv,
-        ...(!remoteExec ? preparedEnvironment.localIdentityEnv : undefined),
-      }
-    : undefined;
-  const shellEnvironment =
-    preparedShellEnvironment && Object.keys(preparedShellEnvironment).length > 0
-      ? preparedShellEnvironment
-      : undefined;
+  const sessionKey = params.sessionKey?.trim();
+  const sessionId = params.sessionId?.trim();
+  const shellEnvironment = {
+    ...preparedEnvironment?.credentialScrubEnv,
+    ...(!remoteExec ? preparedEnvironment?.localIdentityEnv : undefined),
+    OPENCLAW_SHELL: "codex-app-server",
+    OPENCLAW_AGENT_ID: sessionAgentId,
+    ...(sessionKey ? { OPENCLAW_SESSION_KEY: sessionKey } : {}),
+    ...(sessionId ? { OPENCLAW_SESSION_ID: sessionId } : {}),
+  };
   // An empty system-detected overlay intentionally keeps the runtime user's native shell identity.
   // Selected, scrubbed, or remote identities must not let a later profile replace that decision.
   const disableLoginShell =
