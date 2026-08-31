@@ -33,12 +33,29 @@ function resolveNativeSkillAgentIdsForAccount(params: {
   if (!accountId) {
     return undefined;
   }
-  if (accountId === normalizeLowercaseStringOrEmpty(DEFAULT_ACCOUNT_ID)) {
-    return [resolveDefaultAgentId(params.cfg)];
+  const boundAgentId = params.cfg.bindings?.find((binding) => {
+    const match = binding.match;
+    return (
+      match.channel === "discord" &&
+      normalizeLowercaseStringOrEmpty(match.accountId) === accountId &&
+      match.peer === undefined
+    );
+  })?.agentId;
+  if (boundAgentId) {
+    return [boundAgentId];
   }
-  const matchingAgentId = params.cfg.agents?.list?.find(
-    (agent) => normalizeLowercaseStringOrEmpty(agent.id) === accountId,
-  )?.id;
+  if (accountId === normalizeLowercaseStringOrEmpty(DEFAULT_ACCOUNT_ID)) {
+    return params.cfg.agents?.ownership === "explicit"
+      ? undefined
+      : [resolveDefaultAgentId(params.cfg)];
+  }
+  const configuredAgentIds = [
+    ...Object.keys(params.cfg.agents?.entries ?? {}),
+    ...(params.cfg.agents?.list?.map((agent) => agent.id) ?? []),
+  ];
+  const matchingAgentId = configuredAgentIds.find(
+    (agentId) => normalizeLowercaseStringOrEmpty(agentId) === accountId,
+  );
   return matchingAgentId ? [matchingAgentId] : undefined;
 }
 
