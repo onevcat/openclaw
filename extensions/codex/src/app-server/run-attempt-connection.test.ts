@@ -28,7 +28,7 @@ import {
 setupRunAttemptTestHooks();
 
 describe("prepareCodexAttemptConnection", () => {
-  it("preserves native process environment and login-shell behavior for an empty overlay", async () => {
+  it("preserves login-shell behavior while adding only OpenClaw identity to an empty host overlay", async () => {
     const sessionFile = path.join(tempDir, "native-local-no-overlay.jsonl");
     const workspaceDir = path.join(tempDir, "workspace-native-local-no-overlay");
     const params = createParams(sessionFile, workspaceDir);
@@ -48,7 +48,37 @@ describe("prepareCodexAttemptConnection", () => {
       options: { bindingStore: testCodexAppServerBindingStore },
     });
 
-    expect(connection.shellEnvironment).toBeUndefined();
+    expect(connection.shellEnvironment).toEqual({
+      OPENCLAW_SHELL: "codex-app-server",
+      OPENCLAW_AGENT_ID: "main",
+      OPENCLAW_SESSION_KEY: params.sessionKey,
+      OPENCLAW_SESSION_ID: params.sessionId,
+    });
+    expect(connection.disableLoginShell).toBe(false);
+  });
+
+  it("projects OpenClaw runtime identity into app-server and shell environments", async () => {
+    const sessionFile = path.join(tempDir, "openclaw-runtime-identity.jsonl");
+    const workspaceDir = path.join(tempDir, "workspace-openclaw-runtime-identity");
+    const params = createParams(sessionFile, workspaceDir);
+    params.agentId = "onevtail";
+    params.sessionKey = "agent:onevtail:discord:onevtail:direct:owner";
+    params.sessionId = "session-runtime-identity";
+    registerCodexTestSessionIdentity(sessionFile, params.sessionId, params.sessionKey);
+
+    const connection = await prepareCodexAttemptConnection({
+      params,
+      options: { bindingStore: testCodexAppServerBindingStore },
+    });
+
+    const expected = {
+      OPENCLAW_SHELL: "codex-app-server",
+      OPENCLAW_AGENT_ID: "onevtail",
+      OPENCLAW_SESSION_KEY: "agent:onevtail:discord:onevtail:direct:owner",
+      OPENCLAW_SESSION_ID: "session-runtime-identity",
+    };
+    expect(connection.shellEnvironment).toMatchObject(expected);
+    expect(connection.appServer.start.env).toMatchObject(expected);
     expect(connection.disableLoginShell).toBe(false);
   });
 
@@ -72,7 +102,7 @@ describe("prepareCodexAttemptConnection", () => {
       options: { bindingStore: testCodexAppServerBindingStore },
     });
 
-    expect(connection.shellEnvironment).toEqual({ PREVIEW_STORE_TOKEN: "" });
+    expect(connection.shellEnvironment).toMatchObject({ PREVIEW_STORE_TOKEN: "" });
     expect(connection.disableLoginShell).toBe(true);
   });
 
@@ -155,7 +185,7 @@ describe("prepareCodexAttemptConnection", () => {
     expect(connection.appServer.start.env).toMatchObject({ GH_TOKEN: "", GITHUB_TOKEN: "" });
     expect(connection.appServer.start.env ?? {}).not.toHaveProperty("GH_CONFIG_DIR");
     expect(connection.appServer.start.env ?? {}).not.toHaveProperty("GIT_AUTHOR_NAME");
-    expect(connection.shellEnvironment).toEqual({ GH_TOKEN: "", GITHUB_TOKEN: "" });
+    expect(connection.shellEnvironment).toMatchObject({ GH_TOKEN: "", GITHUB_TOKEN: "" });
     expect(connection.disableLoginShell).toBe(true);
   });
 
