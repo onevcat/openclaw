@@ -1,9 +1,11 @@
 // Discord provider module implements model/runtime integration.
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/account-id";
 import {
   listNativeCommandSpecsForConfig,
   listSkillCommandsForAgents,
 } from "openclaw/plugin-sdk/command-auth-native";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
+import { resolveDefaultAgentId } from "openclaw/plugin-sdk/config-runtime";
 import { createLazyRuntimeModule } from "openclaw/plugin-sdk/lazy-runtime";
 import {
   mergeNativeCommandSpecs,
@@ -23,12 +25,30 @@ const loadPluginCommandRuntime = createLazyRuntimeModule(
   () => import("openclaw/plugin-sdk/plugin-command-runtime"),
 );
 
+function resolveNativeSkillAgentIdsForAccount(params: {
+  cfg: OpenClawConfig;
+  accountId?: string;
+}): string[] | undefined {
+  const accountId = normalizeLowercaseStringOrEmpty(params.accountId);
+  if (!accountId) {
+    return undefined;
+  }
+  if (accountId === normalizeLowercaseStringOrEmpty(DEFAULT_ACCOUNT_ID)) {
+    return [resolveDefaultAgentId(params.cfg)];
+  }
+  const matchingAgentId = params.cfg.agents?.list?.find(
+    (agent) => normalizeLowercaseStringOrEmpty(agent.id) === accountId,
+  )?.id;
+  return matchingAgentId ? [matchingAgentId] : undefined;
+}
+
 export async function resolveDiscordProviderCommandSpecs(params: {
   cfg: OpenClawConfig;
   runtime: RuntimeEnv;
   nativeEnabled: boolean;
   nativeSkillsEnabled: boolean;
   voiceEnabled: boolean;
+  accountId?: string;
   maxDiscordCommands?: number;
   listSkillCommandsForAgents?: typeof listSkillCommandsForAgents;
   listNativeCommandSpecsForConfig?: typeof listNativeCommandSpecsForConfig;
@@ -40,6 +60,10 @@ export async function resolveDiscordProviderCommandSpecs(params: {
   const listNativeCommandSpecs =
     params.listNativeCommandSpecsForConfig ?? listNativeCommandSpecsForConfig;
   const maxDiscordCommands = params.maxDiscordCommands ?? 100;
+  const nativeSkillAgentIds = resolveNativeSkillAgentIdsForAccount({
+    cfg: params.cfg,
+    accountId: params.accountId,
+  });
   let pluginCommandRuntime: PluginCommandRuntime | undefined;
   if (params.nativeEnabled) {
     pluginCommandRuntime = (await loadPluginCommandRuntime()).createPluginCommandRuntime();
@@ -84,7 +108,10 @@ export async function resolveDiscordProviderCommandSpecs(params: {
   const provisionalCollisions: string[] = [];
   let skillCommands =
     params.nativeEnabled && params.nativeSkillsEnabled
-      ? listSkillCommands({ cfg: params.cfg })
+      ? listSkillCommands({
+          cfg: params.cfg,
+          ...(nativeSkillAgentIds ? { agentIds: nativeSkillAgentIds } : {}),
+        })
       : [];
   let commandSpecs: DiscordProviderCommandSpec[] = params.nativeEnabled
     ? mergePluginCommandSpecs(listPrimaryCommandSpecs(skillCommands), (normalizedName) =>
