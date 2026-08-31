@@ -34,6 +34,16 @@ const CODEX_ACP_WRAPPER_COMMAND_WITH_LEASE = `${CODEX_ACP_WRAPPER_COMMAND} ${OPE
 const LOCAL_NODE_MODULES_CODEX_COMMAND = `node "${path.resolve(
   "node_modules/@agentclientprotocol/codex-acp/dist/index.js",
 )}"`;
+const TEST_ACPX_SESSION_KEY = "agent:codex:acp:binding:test";
+
+function withTestRuntimeIdentity(command: string, sessionKey = TEST_ACPX_SESSION_KEY): string {
+  return (
+    testing.withOpenClawRuntimeEnvironment(command, {
+      sessionKey,
+      runtimeAgent: "codex",
+    }) ?? command
+  );
+}
 
 function makeRuntime(
   baseStore: TestSessionStore,
@@ -1330,6 +1340,18 @@ describe("AcpxRuntime fresh reset wrapper", () => {
     );
   });
 
+  it("prefixes ACPX launch commands with the controlling OpenClaw identity", () => {
+    const command = testing.withOpenClawRuntimeEnvironment(CODEX_ACP_COMMAND, {
+      sessionKey: "agent:onevtail:acp:review",
+      runtimeAgent: "codex",
+    });
+
+    expect(command).toBe(
+      "env OPENCLAW_SHELL=acpx-runtime OPENCLAW_AGENT_ID=onevtail OPENCLAW_SESSION_KEY=agent:onevtail:acp:review npx @agentclientprotocol/codex-acp@1.6.2",
+    );
+    expect(testing.isCodexAcpCommand(command)).toBe(true);
+  });
+
   it("passes gpt-5.5 Codex ACP startup through instead of blocking it", async () => {
     const baseStore: TestSessionStore = {
       load: vi.fn(async () => undefined),
@@ -2252,11 +2274,11 @@ describe("AcpxRuntime fresh reset wrapper", () => {
     });
 
     expect(leaseStore.store.save).not.toHaveBeenCalled();
-    expect(launchCommands).toEqual([LOCAL_NODE_MODULES_CODEX_COMMAND]);
+    expect(launchCommands).toEqual([withTestRuntimeIdentity(LOCAL_NODE_MODULES_CODEX_COMMAND)]);
   });
 
   it("keeps reusable persistent ACP launch commands stable across ensures", async () => {
-    const leasedCommand = `${CODEX_ACP_WRAPPER_COMMAND} ${OPENCLAW_ACPX_LEASE_ID_ARG} lease-existing ${OPENCLAW_GATEWAY_INSTANCE_ID_ARG} gateway-test`;
+    const leasedCommand = `${withTestRuntimeIdentity(CODEX_ACP_WRAPPER_COMMAND)} ${OPENCLAW_ACPX_LEASE_ID_ARG} lease-existing ${OPENCLAW_GATEWAY_INSTANCE_ID_ARG} gateway-test`;
     const baseStore: TestSessionStore = {
       load: vi.fn(async () => ({
         name: "agent:codex:acp:binding:test",
@@ -2316,7 +2338,7 @@ describe("AcpxRuntime fresh reset wrapper", () => {
   });
 
   it("recreates a missing sidecar with the persisted lease identity", async () => {
-    const leasedCommand = `${CODEX_ACP_WRAPPER_COMMAND} ${OPENCLAW_ACPX_LEASE_ID_ARG} lease-missing ${OPENCLAW_GATEWAY_INSTANCE_ID_ARG} gateway-test`;
+    const leasedCommand = `${withTestRuntimeIdentity(CODEX_ACP_WRAPPER_COMMAND)} ${OPENCLAW_ACPX_LEASE_ID_ARG} lease-missing ${OPENCLAW_GATEWAY_INSTANCE_ID_ARG} gateway-test`;
     let savedRecord: Record<string, unknown> = {
       name: "agent:codex:acp:binding:test",
       acpxRecordId: "record-1",
@@ -2579,7 +2601,7 @@ describe("AcpxRuntime fresh reset wrapper", () => {
     expect(leaseStore.leases.size).toBe(1);
   });
 
-  it("adopts legacy persistent commands before their next reconnect", async () => {
+  it("replaces legacy persistent commands with an identity-scoped launch", async () => {
     let savedRecord: Record<string, unknown> = {
       name: "agent:codex:acp:binding:test",
       acpxRecordId: "record-1",
@@ -2627,17 +2649,18 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       mode: "persistent",
     });
 
-    expect(resolvedCommands).toEqual([CODEX_ACP_WRAPPER_COMMAND]);
-    expect(savedRecord.agentCommand).toContain(OPENCLAW_ACPX_LEASE_ID_ARG);
+    expect(resolvedCommands).toHaveLength(1);
+    expect(resolvedCommands[0]).toContain("OPENCLAW_SHELL=acpx-runtime");
+    expect(resolvedCommands[0]).toContain("OPENCLAW_AGENT_ID=codex");
+    expect(resolvedCommands[0]).toContain(`OPENCLAW_SESSION_KEY=${TEST_ACPX_SESSION_KEY}`);
+    expect(resolvedCommands[0]).toContain(OPENCLAW_ACPX_LEASE_ID_ARG);
+    expect(savedRecord.agentCommand).toBe(resolvedCommands[0]);
     expect(savedRecord.agentCommand).toContain(OPENCLAW_GATEWAY_INSTANCE_ID_ARG);
-    expect(savedRecord.pid).toBeUndefined();
-    expect(leaseStore.leases.size).toBe(0);
-
-    await wrappedStore.save({ ...savedRecord, pid: 888 });
+    expect(leaseStore.leases.size).toBe(1);
 
     const [lease] = Array.from(leaseStore.leases.values());
     expect(lease?.leaseId).toBe(savedRecord.openclawLeaseId);
-    expect(lease?.rootPid).toBe(888);
+    expect(lease?.rootPid).toBe(777);
   });
 
   it("keeps pending process leases when a fresh launch fails after spawn may have occurred", async () => {
@@ -3274,7 +3297,7 @@ describe("AcpxRuntime fresh reset wrapper", () => {
   });
 
   it("rechecks a reusable sidecar after the prior owner retires it", async () => {
-    const leasedCommand = `${CODEX_ACP_WRAPPER_COMMAND} ${OPENCLAW_ACPX_LEASE_ID_ARG} lease-reusable-race ${OPENCLAW_GATEWAY_INSTANCE_ID_ARG} gateway-test`;
+    const leasedCommand = `${withTestRuntimeIdentity(CODEX_ACP_WRAPPER_COMMAND)} ${OPENCLAW_ACPX_LEASE_ID_ARG} lease-reusable-race ${OPENCLAW_GATEWAY_INSTANCE_ID_ARG} gateway-test`;
     const sessionKey = "agent:codex:acp:binding:test";
     const baseStore: TestSessionStore = {
       load: vi.fn(async () => ({

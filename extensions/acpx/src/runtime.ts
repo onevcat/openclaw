@@ -100,6 +100,11 @@ function withOpenClawLeaseSessionMetadata<T extends object>(
   };
 }
 
+type AcpxRuntimeIdentityContext = {
+  sessionKey: string;
+  runtimeAgent?: string;
+};
+
 type AcpxLaunchLeaseContext = {
   leaseId: string;
   gatewayInstanceId: string;
@@ -696,6 +701,23 @@ function quoteShellArg(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+function withOpenClawRuntimeEnvironment(
+  command: string | undefined,
+  params: { sessionKey?: string; runtimeAgent?: string },
+): string | undefined {
+  if (!command) {
+    return undefined;
+  }
+  const sessionKey = params.sessionKey?.trim();
+  const agentId = readAgentFromSessionKey(sessionKey) ?? normalizeAgentName(params.runtimeAgent);
+  const assignments = [
+    "OPENCLAW_SHELL=acpx-runtime",
+    ...(agentId ? [`OPENCLAW_AGENT_ID=${quoteShellArg(agentId)}`] : []),
+    ...(sessionKey ? [`OPENCLAW_SESSION_KEY=${quoteShellArg(sessionKey)}`] : []),
+  ];
+  return ["env", ...assignments, command].join(" ");
+}
+
 function normalizeAgentCommand(command: string | string[]): string | undefined {
   const normalized = Array.isArray(command)
     ? command.map((part) => quoteShellArg(part)).join(" ")
@@ -817,6 +839,9 @@ export class AcpxRuntime implements CompleteAcpRuntime {
   private readonly gatewayInstanceId: string | undefined;
   private readonly processLeaseStore: AcpxProcessLeaseStore | undefined;
   private readonly launchLeaseScope = new AsyncLocalStorage<AcpxLaunchLeaseContext | undefined>();
+  private readonly runtimeIdentityScope = new AsyncLocalStorage<
+    AcpxRuntimeIdentityContext | undefined
+  >();
   private readonly ensureSessionTails = new Map<string, Promise<void>>();
   private readonly processLeaseTransitionTails = new Map<string, Promise<void>>();
   private readonly processLeaseOperationCounts = new Map<string, number>();
@@ -954,15 +979,19 @@ export class AcpxRuntime implements CompleteAcpRuntime {
   }
 
   private commandWithLaunchLease(command: string): string {
+    const identity = this.runtimeIdentityScope.getStore();
+    const runtimeCommand = identity
+      ? (withOpenClawRuntimeEnvironment(command, identity) ?? command)
+      : command;
     const launch = this.launchLeaseScope.getStore();
     if (!launch) {
-      return command;
+      return runtimeCommand;
     }
-    if (command === launch.stableCommand) {
+    if (runtimeCommand === launch.stableCommand) {
       return launch.resolvedCommand;
     }
     return withAcpxLeaseEnvironment({
-      command,
+      command: runtimeCommand,
       leaseId: launch.leaseId,
       gatewayInstanceId: launch.gatewayInstanceId,
     });
@@ -1535,10 +1564,14 @@ export class AcpxRuntime implements CompleteAcpRuntime {
       : claudeModelOverride
         ? { ...input, model: claudeModelOverride }
         : input;
-    const stableLaunchCommand =
+    const modelScopedCommand =
       codexModelOverride && command
         ? appendCodexAcpConfigOverrides(command, codexModelOverride)
         : command;
+    const stableLaunchCommand = withOpenClawRuntimeEnvironment(modelScopedCommand, {
+      sessionKey: input.sessionKey,
+      runtimeAgent: input.agent,
+    });
     const reusableCommand = await this.readReusablePersistentSessionCommand({
       sessionKey: input.sessionKey,
       mode: input.mode,
@@ -1547,31 +1580,35 @@ export class AcpxRuntime implements CompleteAcpRuntime {
       resumeSessionId: input.resumeSessionId,
     });
 
-    const handle = !codexModelOverride
-      ? await this.runWithLaunchLease({
-          sessionKey: ensureInput.sessionKey,
-          command: stableLaunchCommand,
-          reusableCommand,
-          run: () =>
-            this.withCodexWrapperDiagnostics({
+    const handle = await this.runtimeIdentityScope.run(
+      { sessionKey: input.sessionKey, runtimeAgent: input.agent },
+      async () =>
+        !codexModelOverride
+          ? await this.runWithLaunchLease({
+              sessionKey: ensureInput.sessionKey,
               command: stableLaunchCommand,
-              fallbackCode: "ACP_SESSION_INIT_FAILED",
-              run: () => ensureDelegateSessionWithModelFallback(delegate, ensureInput),
+              reusableCommand,
+              run: () =>
+                this.withCodexWrapperDiagnostics({
+                  command: stableLaunchCommand,
+                  fallbackCode: "ACP_SESSION_INIT_FAILED",
+                  run: () => ensureDelegateSessionWithModelFallback(delegate, ensureInput),
+                }),
+            })
+          : await this.runWithLaunchLease({
+              sessionKey: input.sessionKey,
+              command: stableLaunchCommand,
+              reusableCommand,
+              run: () =>
+                this.codexAcpModelOverrideScope.run(codexModelOverride, () =>
+                  this.withCodexWrapperDiagnostics({
+                    command: stableLaunchCommand,
+                    fallbackCode: "ACP_SESSION_INIT_FAILED",
+                    run: () => delegate.ensureSession(withAcpxSessionOptions(ensureInput)),
+                  }),
+                ),
             }),
-        })
-      : await this.runWithLaunchLease({
-          sessionKey: input.sessionKey,
-          command: stableLaunchCommand,
-          reusableCommand,
-          run: () =>
-            this.codexAcpModelOverrideScope.run(codexModelOverride, () =>
-              this.withCodexWrapperDiagnostics({
-                command: stableLaunchCommand,
-                fallbackCode: "ACP_SESSION_INIT_FAILED",
-                run: () => delegate.ensureSession(withAcpxSessionOptions(ensureInput)),
-              }),
-            ),
-        });
+    );
     return appliedModel ? { ...handle, appliedModel } : handle;
   }
 
@@ -1896,6 +1933,7 @@ export const testing = {
   isClaudeAcpCommand,
   isCodexAcpCommand,
   normalizeAgentCommand,
+  withOpenClawRuntimeEnvironment,
 };
 
 export type { AcpAgentRegistry, AcpRuntimeOptions, AcpSessionRecord, AcpSessionStore };
