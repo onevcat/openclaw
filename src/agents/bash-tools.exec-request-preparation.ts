@@ -268,6 +268,9 @@ export function createExecRequestPreparation(params: {
     } catch {
       return execParams;
     }
+    // Plugins projecting session identity into exec env (OPENCLAW_SESSION_ID)
+    // need the session UUID, not only the key; both are known at tool-build time.
+    const sessionId = params.defaults?.sessionId ?? context?.hookContext?.sessionId;
     const rawPluginEnv = await hookRunner.runResolveExecEnv(
       {
         sessionKey: params.defaults?.sessionKey ?? context?.hookContext?.sessionKey,
@@ -277,6 +280,7 @@ export function createExecRequestPreparation(params: {
       {
         agentId: params.agentId ?? context?.hookContext?.agentId,
         sessionKey: params.defaults?.sessionKey ?? context?.hookContext?.sessionKey,
+        ...(sessionId ? { sessionId } : {}),
         messageProvider: params.defaults?.messageProvider,
         channelId: params.defaults?.currentChannelId ?? context?.hookContext?.channelId,
         ...(params.defaults?.channelContext
