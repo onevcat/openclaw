@@ -23,6 +23,7 @@ import { buildRecallPrompt } from "./prompt.js";
 import { getModelRef } from "./query.js";
 import { toSingleLineErrorMessage } from "./recall-state.js";
 import { resolveRecallRunChannelContext } from "./session.js";
+import { resolveSharedOwnerSessionContext } from "./shared-owner-recall.js";
 import {
   attachPartialTimeoutData,
   readMemoryToolResultEvidence,
@@ -241,10 +242,19 @@ async function runRecallSubagent(params: {
       await fs.mkdir(persistedDir, { recursive: true, mode: 0o700 });
       await fs.chmod(persistedDir, 0o700).catch(() => undefined);
     }
+    const sharedOwnerSessionContext = await resolveSharedOwnerSessionContext({
+      cfg: params.runtimeConfig,
+      agentId: params.agentId,
+      currentSessionKey: parentSessionKey,
+      query: params.searchQuery,
+      sharedOwnerDirectSessionKeys: params.config.sharedOwnerDirectSessionKeys,
+      signal: params.abortSignal,
+    });
     const prompt = buildRecallPrompt({
       config: params.config,
       query: params.query,
       searchQuery: params.searchQuery,
+      sharedOwnerSessionContext,
     });
     const { messageChannel, messageProvider } = resolveRecallRunChannelContext({
       api: params.api,

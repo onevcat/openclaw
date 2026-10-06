@@ -767,7 +767,14 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       agent: "codex",
       mode: "persistent",
       model: "gpt-5.4",
-      sessionOptions: { model: "gpt-5.4" },
+      sessionOptions: {
+        model: "gpt-5.4",
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "codex",
+          OPENCLAW_SESSION_KEY: "agent:codex:acp:test",
+        },
+      },
     });
   });
 
@@ -837,7 +844,14 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       agent: "claude",
       mode: "persistent",
       model: expectedModel,
-      sessionOptions: { model: expectedModel },
+      sessionOptions: {
+        model: expectedModel,
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "claude",
+          OPENCLAW_SESSION_KEY: "agent:claude:acp:test",
+        },
+      },
     });
   });
 
@@ -869,6 +883,13 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       sessionKey: "agent:codex:acp:test",
       agent: "codex",
       mode: "persistent",
+      sessionOptions: {
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "codex",
+          OPENCLAW_SESSION_KEY: "agent:codex:acp:test",
+        },
+      },
     });
     expect(ensureInput).not.toHaveProperty("model");
     expect(ensureInput).not.toHaveProperty("thinking");
@@ -1239,7 +1260,14 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       agent: "main",
       mode: "persistent",
       model: "openai/gpt-5.5",
-      sessionOptions: { model: "openai/gpt-5.5" },
+      sessionOptions: {
+        model: "openai/gpt-5.5",
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "main",
+          OPENCLAW_SESSION_KEY: "agent:main:acp:test",
+        },
+      },
     });
   });
 
@@ -1291,7 +1319,13 @@ describe("AcpxRuntime fresh reset wrapper", () => {
         sessionOptions: { model: "openrouter/owl-alpha" },
       });
       const [, secondCall] = ensure.mock.calls;
-      expect(secondCall?.[0]).not.toHaveProperty("sessionOptions");
+      expect(secondCall?.[0]).toHaveProperty("sessionOptions", {
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "opencode",
+          OPENCLAW_SESSION_KEY: "agent:opencode:acp:test",
+        },
+      });
       expect((secondCall?.[0] as { model?: string } | undefined)?.model).toBeUndefined();
     },
   );
@@ -1394,7 +1428,14 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       agent: "codex",
       mode: "persistent",
       model: "gpt-5.5",
-      sessionOptions: { model: "gpt-5.5" },
+      sessionOptions: {
+        model: "gpt-5.5",
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "codex",
+          OPENCLAW_SESSION_KEY: "agent:codex:acp:test",
+        },
+      },
     });
   });
 
@@ -1430,7 +1471,14 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       mode: "persistent",
       model: "gpt-5.6-sol",
       thinking: "medium",
-      sessionOptions: { model: "gpt-5.6-sol" },
+      sessionOptions: {
+        model: "gpt-5.6-sol",
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "codex",
+          OPENCLAW_SESSION_KEY: "agent:codex:acp:test",
+        },
+      },
     });
   });
 
@@ -1518,9 +1566,16 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       sessionKey: "agent:codex:acp:test",
       agent: "codex",
       mode: "persistent",
+      sessionOptions: {
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "codex",
+          OPENCLAW_SESSION_KEY: "agent:codex:acp:test",
+        },
+      },
     });
     expect(ensureInput).not.toHaveProperty("model");
-    expect(ensureInput).not.toHaveProperty("sessionOptions");
+    expect(ensureInput).not.toHaveProperty("sessionOptions.model");
   });
 
   it("reports a dropped leaked non-openai default on the returned handle", async () => {
@@ -1604,7 +1659,7 @@ describe("AcpxRuntime fresh reset wrapper", () => {
 
     const ensureInput = readFirstEnsureSessionInput(ensure);
     expect(ensureInput).not.toHaveProperty("model");
-    expect(ensureInput).not.toHaveProperty("sessionOptions");
+    expect(ensureInput).not.toHaveProperty("sessionOptions.model");
     expect(ensureInput).toMatchObject({ thinking: "low" });
   });
 
@@ -1634,7 +1689,7 @@ describe("AcpxRuntime fresh reset wrapper", () => {
 
     const ensureInput = readFirstEnsureSessionInput(ensure);
     expect(ensureInput).not.toHaveProperty("model");
-    expect(ensureInput).not.toHaveProperty("sessionOptions");
+    expect(ensureInput).not.toHaveProperty("sessionOptions.model");
   });
 
   it.each(["google/gemini-3.1-flash-lite", "gpt-5.4/ultra"])(

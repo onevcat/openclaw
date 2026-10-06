@@ -632,11 +632,25 @@ function normalizeClaudeAcpModelOverride(rawModel: string | undefined): string |
 function withAcpxSessionOptions(input: OpenClawRuntimeEnsureInput): AcpxDelegateEnsureInput {
   const existingOptions = (input as { sessionOptions?: SessionAgentOptions }).sessionOptions;
   const model = input.model?.trim() || existingOptions?.model;
-  const sessionOptions = model ? { ...existingOptions, model } : existingOptions;
+  const sessionKey = input.sessionKey.trim();
+  const agentId = readAgentFromSessionKey(sessionKey) ?? normalizeAgentName(input.agent);
+  const sessionOptions = {
+    ...existingOptions,
+    ...(model ? { model } : {}),
+    // ACPX persists sessionOptions.env and injects it into the child process.
+    // Keep the launch command intact so ACPX can continue to identify and
+    // reconnect Codex wrappers from existing session records.
+    env: {
+      ...existingOptions?.env,
+      OPENCLAW_SHELL: "acpx-runtime",
+      ...(agentId ? { OPENCLAW_AGENT_ID: agentId } : {}),
+      ...(sessionKey ? { OPENCLAW_SESSION_KEY: sessionKey } : {}),
+    },
+  };
   const { modelExplicit: _modelExplicit, ...rest } = input;
   return {
     ...rest,
-    ...(sessionOptions ? { sessionOptions } : {}),
+    sessionOptions,
   } as AcpxDelegateEnsureInput;
 }
 
@@ -676,7 +690,6 @@ function appendCodexAcpConfigOverrides(
   }
   return [...splitCommandParts(command), OPENCLAW_CODEX_CONFIG_ARG, JSON.stringify(config)];
 }
-
 function resolveAgentCommand(params: {
   agentName: string | undefined;
   agentRegistry: AcpAgentRegistry;

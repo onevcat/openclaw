@@ -35,6 +35,23 @@ describe("active-memory manifest config schema", () => {
     expect(normalizePluginConfig({}).mode).toBe("escalate");
   });
 
+  it("keeps only canonical direct-session keys in the shared owner cluster", () => {
+    expect(
+      normalizePluginConfig({
+        sharedOwnerDirectSessionKeys: [
+          "agent:main:discord:default:direct:onevcat",
+          "agent:onevpaw:discord:onevpaw:direct:onevcat",
+          "agent:main:discord:default:direct:onevcat",
+          "agent:main:discord:default:group:onevcat",
+          "not-a-session-key",
+        ],
+      }).sharedOwnerDirectSessionKeys,
+    ).toEqual([
+      "agent:main:discord:default:direct:onevcat",
+      "agent:onevpaw:discord:onevpaw:direct:onevcat",
+    ]);
+  });
+
   it("accepts modelFallback for CLI and config.patch flows", () => {
     const result = validateJsonSchemaValue({
       schema: manifest.configSchema,

@@ -6,6 +6,7 @@ import {
   resolveIntegerOption,
 } from "openclaw/plugin-sdk/number-runtime";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
+import { parseAgentSessionKey } from "openclaw/plugin-sdk/routing";
 import {
   asOptionalRecord,
   normalizeLowercaseStringOrEmpty,
@@ -74,6 +75,17 @@ function normalizeTranscriptDir(value: unknown): string {
 
 function normalizeChatIdList(value: unknown): string[] {
   return uniqueStrings(normalizeTrimmedStringList(value).map((entry) => entry.toLowerCase()));
+}
+
+function normalizeSharedOwnerDirectSessionKeys(value: unknown): string[] {
+  return uniqueStrings(
+    normalizeTrimmedStringList(value)
+      .map((entry) => entry.toLowerCase())
+      .filter((sessionKey) => {
+        const parsed = parseAgentSessionKey(sessionKey);
+        return Boolean(parsed?.agentId && /(?:^|:)(?:direct|dm):[^:]+$/i.test(parsed.rest));
+      }),
+  );
 }
 
 function normalizeConfiguredToolsAllow(value: unknown): string[] | undefined {
@@ -202,6 +214,9 @@ function normalizePluginConfig(
     allowedChatTypes: allowedChatTypes.length > 0 ? allowedChatTypes : ["direct"],
     allowedChatIds: normalizeChatIdList(raw.allowedChatIds),
     deniedChatIds: normalizeChatIdList(raw.deniedChatIds),
+    sharedOwnerDirectSessionKeys: normalizeSharedOwnerDirectSessionKeys(
+      raw.sharedOwnerDirectSessionKeys,
+    ),
     thinking: resolveThinkingLevel(raw.thinking),
     fastMode: normalizeActiveMemoryFastMode(raw.fastMode),
     promptStyle: resolvePromptStyle(raw.promptStyle, raw.queryMode),
@@ -344,6 +359,7 @@ export {
   isMissingRegisteredMemoryToolsError,
   normalizeActiveMemoryFastMode,
   normalizePluginConfig,
+  normalizeSharedOwnerDirectSessionKeys,
   resetActiveMemoryConfigForTests,
   readActiveMemoryConfig,
   resolvePersistentTranscriptBaseDir,

@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { normalizeActiveSummary } from "./prompt.js";
+import { normalizePluginConfig } from "./config.js";
+import { buildRecallPrompt, normalizeActiveSummary } from "./prompt.js";
 
 describe("normalizeActiveSummary", () => {
+  it("includes pre-filtered shared owner excerpts as data, not instructions", () => {
+    const prompt = buildRecallPrompt({
+      config: normalizePluginConfig({}),
+      query: "Latest user message",
+      searchQuery: "Latest user message",
+      sharedOwnerSessionContext:
+        "Trusted owner direct-message excerpts from sibling agents follow.\\n[onevpaw] Finish the ledger migration.",
+    });
+
+    expect(prompt).toContain("Finish the ledger migration.");
+  });
+
   it.each([
     "Hello! How can I help you today?",
     "Hello! It seems like your message got cut off.",

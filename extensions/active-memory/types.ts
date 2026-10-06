@@ -143,6 +143,7 @@ type ResolvedActiveRecallPluginConfig = {
   allowedChatTypes: Array<"direct" | "group" | "channel" | "explicit">;
   allowedChatIds: string[];
   deniedChatIds: string[];
+  sharedOwnerDirectSessionKeys: string[];
   thinking: ActiveMemoryThinkingLevel;
   fastMode?: ActiveMemoryFastMode;
   promptStyle:

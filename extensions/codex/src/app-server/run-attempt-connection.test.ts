@@ -283,17 +283,22 @@ describe("prepareCodexAttemptConnection", () => {
       expect(connection.appServer.start.transport).toBe(
         placement === "ordinary-unix-server" ? "unix" : "websocket",
       );
-      expect(connection.shellEnvironment).toBeUndefined();
+      expect(connection.shellEnvironment).toMatchObject({
+        OPENCLAW_SHELL: "codex-app-server",
+        OPENCLAW_AGENT_ID: "main",
+        OPENCLAW_SESSION_KEY: params.sessionKey,
+        OPENCLAW_SESSION_ID: params.sessionId,
+      });
       expect(connection.appServer.start.env ?? {}).not.toHaveProperty("OPENCLAW_STATE_DIR");
       expect(connection.disableLoginShell).toBe(false);
       return;
     }
     expect(connection.appServer.start.transport).toBe("stdio");
-    expect(connection.shellEnvironment).toEqual(localProcessEnv);
+    expect(connection.shellEnvironment).toMatchObject(localProcessEnv);
     expect(connection.appServer.start.env).toMatchObject(localProcessEnv);
     expect(connection.disableLoginShell).toBe(true);
   });
-  it("preserves native process environment and login-shell behavior for an empty overlay", async () => {
+  it("preserves login-shell behavior while adding OpenClaw identity to an empty overlay", async () => {
     const sessionFile = path.join(tempDir, "native-local-no-overlay.jsonl");
     const workspaceDir = path.join(tempDir, "workspace-native-local-no-overlay");
     const params = createParams(sessionFile, workspaceDir);
@@ -313,7 +318,13 @@ describe("prepareCodexAttemptConnection", () => {
       options: { bindingStore: testCodexAppServerBindingStore },
     });
 
-    expect(connection.shellEnvironment).toBeUndefined();
+    expect(connection.shellEnvironment).toEqual({
+      OPENCLAW_SHELL: "codex-app-server",
+      OPENCLAW_AGENT_ID: "main",
+      OPENCLAW_SESSION_KEY: params.sessionKey,
+      OPENCLAW_SESSION_ID: params.sessionId,
+    });
+    expect(connection.appServer.start.env).toMatchObject(connection.shellEnvironment);
     expect(connection.disableLoginShell).toBe(false);
   });
 
@@ -337,7 +348,7 @@ describe("prepareCodexAttemptConnection", () => {
       options: { bindingStore: testCodexAppServerBindingStore },
     });
 
-    expect(connection.shellEnvironment).toEqual({ PREVIEW_STORE_TOKEN: "" });
+    expect(connection.shellEnvironment).toMatchObject({ PREVIEW_STORE_TOKEN: "" });
     expect(connection.disableLoginShell).toBe(true);
   });
 
@@ -398,7 +409,7 @@ describe("prepareCodexAttemptConnection", () => {
         options: { bindingStore: testCodexAppServerBindingStore },
       });
 
-      expect(connection.shellEnvironment).toEqual({
+      expect(connection.shellEnvironment).toMatchObject({
         ...credentialScrubEnv,
         ...(location === "local" ? localIdentityEnv : {}),
       });

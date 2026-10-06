@@ -79,6 +79,7 @@ function buildRecallPrompt(params: {
   config: ResolvedActiveRecallPluginConfig;
   query: string;
   searchQuery: string;
+  sharedOwnerSessionContext?: string;
 }): string {
   const defaultInstructions = [
     "You are a memory search agent.",
@@ -144,8 +145,11 @@ function buildRecallPrompt(params: {
   return [
     instructionBlock,
     `Bounded memory search query:\n${params.searchQuery}`,
+    params.sharedOwnerSessionContext,
     `Conversation context:\n${params.query}`,
-  ].join("\n\n");
+  ]
+    .filter((section): section is string => Boolean(section))
+    .join("\n\n");
 }
 
 function escapeXml(str: string): string {
