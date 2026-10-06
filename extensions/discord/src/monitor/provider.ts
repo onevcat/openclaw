@@ -266,6 +266,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts) {
     nativeEnabled,
     nativeSkillsEnabled,
     voiceEnabled,
+    accountId: account.accountId,
     prepareSkillCommandsForAgents: discordProviderRuntime.prepareSkillCommandsForAgents,
     listNativeCommandSpecsForConfig: discordProviderRuntime.listNativeCommandSpecsForConfig,
   });

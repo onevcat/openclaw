@@ -443,17 +443,59 @@ describe("prepareCodexAttemptConnection", () => {
         expect(connection.appServer.start.transport).toBe(
           placement === "ordinary-unix-server" ? "unix" : "websocket",
         );
-        expect(connection.shellEnvironment).toBeUndefined();
+        expect(connection.shellEnvironment).toEqual({
+        OPENCLAW_SHELL: "codex-app-server",
+        OPENCLAW_AGENT_ID: "main",
+        OPENCLAW_SESSION_KEY: params.sessionKey,
+        OPENCLAW_SESSION_ID: params.sessionId,
+      });
         expect(connection.appServer.start.env ?? {}).not.toHaveProperty("OPENCLAW_STATE_DIR");
         expect(connection.disableLoginShell).toBe(false);
         return;
       }
       expect(connection.appServer.start.transport).toBe("stdio");
-      expect(connection.shellEnvironment).toEqual(localProcessEnv);
+      expect(connection.shellEnvironment).toEqual({
+        ...localProcessEnv,
+        OPENCLAW_SHELL: "codex-app-server",
+        OPENCLAW_AGENT_ID: "main",
+        OPENCLAW_SESSION_KEY: params.sessionKey,
+        OPENCLAW_SESSION_ID: params.sessionId,
+      });
       expect(connection.appServer.start.env).toMatchObject(localProcessEnv);
       expect(connection.disableLoginShell).toBe(true);
     },
   );
+
+  it("adds OpenClaw shell identity while preserving login-shell behavior for an empty overlay", async () => {
+    const sessionFile = path.join(tempDir, "native-local-no-overlay.jsonl");
+    const workspaceDir = path.join(tempDir, "workspace-native-local-no-overlay");
+    const params = createParams(sessionFile, workspaceDir);
+    params.hostCapabilities = Object.freeze({
+      ...params.hostCapabilities,
+      preparedEnvironment: () =>
+        Object.freeze({
+          credentialScrubEnv: Object.freeze({}),
+          localIdentityEnv: Object.freeze({}),
+          managedLocalIdentity: false,
+        }),
+    });
+    registerCodexTestSessionIdentity(sessionFile, params.sessionId, params.sessionKey);
+
+    const connection = await prepareCodexAttemptConnection({
+      params,
+      options: { bindingStore: testCodexAppServerBindingStore },
+    });
+
+    using _ = { [Symbol.dispose]: () => connection.releaseBindingAuthority() };
+
+    expect(connection.shellEnvironment).toEqual({
+      OPENCLAW_SHELL: "codex-app-server",
+      OPENCLAW_AGENT_ID: "main",
+      OPENCLAW_SESSION_KEY: params.sessionKey,
+      OPENCLAW_SESSION_ID: params.sessionId,
+    });
+    expect(connection.disableLoginShell).toBe(false);
+  });
 
   it("disables login shells for custom credential scrub overlays", async () => {
     const sessionFile = path.join(tempDir, "native-local-custom-scrub.jsonl");
@@ -478,7 +520,13 @@ describe("prepareCodexAttemptConnection", () => {
       [Symbol.dispose]: () => connection.releaseBindingAuthority(),
     };
 
-    expect(connection.shellEnvironment).toEqual({ PREVIEW_STORE_TOKEN: "" });
+    expect(connection.shellEnvironment).toEqual({
+      PREVIEW_STORE_TOKEN: "",
+        OPENCLAW_SHELL: "codex-app-server",
+        OPENCLAW_AGENT_ID: "main",
+        OPENCLAW_SESSION_KEY: params.sessionKey,
+        OPENCLAW_SESSION_ID: params.sessionId,
+    });
     expect(connection.disableLoginShell).toBe(true);
   });
 
@@ -544,6 +592,10 @@ describe("prepareCodexAttemptConnection", () => {
       };
 
       expect(connection.shellEnvironment).toEqual({
+        OPENCLAW_SHELL: "codex-app-server",
+        OPENCLAW_AGENT_ID: "main",
+        OPENCLAW_SESSION_KEY: params.sessionKey,
+        OPENCLAW_SESSION_ID: params.sessionId,
         ...credentialScrubEnv,
         ...(location === "local" ? localIdentityEnv : {}),
         ...(location === "local" ? { PATH: "/fixture/tools:/fixture/system" } : {}),

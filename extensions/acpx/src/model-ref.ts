@@ -2,6 +2,8 @@ import {
   isRequestedModelUnsupportedError,
   type AcpxRuntime as BaseAcpxRuntime,
 } from "acpx/runtime";
+import { parseAgentSessionKey } from "openclaw/plugin-sdk/routing";
+import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/string-coerce-runtime";
 import type { AcpRuntime } from "../runtime-api.js";
 
 type DelegateEnsureInput = Parameters<BaseAcpxRuntime["ensureSession"]>[0];
@@ -10,9 +12,23 @@ type EnsureInput = Parameters<AcpRuntime["ensureSession"]>[0] &
 
 export function withAcpxSessionOptions(input: EnsureInput): DelegateEnsureInput {
   const model = input.model?.trim() || input.sessionOptions?.model;
-  const sessionOptions = model ? { ...input.sessionOptions, model } : input.sessionOptions;
+  const sessionKey = input.sessionKey.trim();
+  const agentId =
+    normalizeOptionalLowercaseString(parseAgentSessionKey(sessionKey)?.agentId) ??
+    normalizeOptionalLowercaseString(input.agent);
+  const sessionOptions = {
+    ...input.sessionOptions,
+    ...(model ? { model } : {}),
+    // Persist identity in ACPX options without changing reconnect command identity.
+    env: {
+      ...input.sessionOptions?.env,
+      OPENCLAW_SHELL: "acpx-runtime",
+      ...(agentId ? { OPENCLAW_AGENT_ID: agentId } : {}),
+      ...(sessionKey ? { OPENCLAW_SESSION_KEY: sessionKey } : {}),
+    },
+  };
   const { modelExplicit: _modelExplicit, thinkingExplicit: _thinkingExplicit, ...rest } = input;
-  return { ...rest, ...(sessionOptions ? { sessionOptions } : {}) };
+  return { ...rest, sessionOptions };
 }
 
 // Try the exact harness id first. ACPX owns live catalog validation and vendor aliases;
