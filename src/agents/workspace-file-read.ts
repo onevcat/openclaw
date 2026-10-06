@@ -5,7 +5,12 @@ import { sameFileIdentity, type FileIdentityStat } from "@openclaw/fs-safe/advan
 import { openRootFile } from "../infra/boundary-file-read.js";
 import { hasErrnoCode } from "../infra/errno.js";
 import { retryAsync } from "../infra/retry.js";
+import { resolveUserPath } from "../utils.js";
 import { getAgentWorkspaceAccess } from "./workspace-access.js";
+import {
+  DEFAULT_TOOLS_FILENAME,
+  WORKSPACE_BOOTSTRAP_FILENAMES,
+} from "./workspace-bootstrap-policy.js";
 import {
   MAX_WORKSPACE_BOOTSTRAP_FILE_BYTES,
   readWorkspaceBootstrapFile,
@@ -67,6 +72,46 @@ export function workspaceFilesShareSourceIdentity(left: object, right: object): 
   );
 }
 
+async function openWorkspaceBootstrapFile(params: {
+  filePath: string;
+  workspaceDir: string;
+  rejectAliases?: boolean;
+}) {
+  const opened = await openRootFile({
+    absolutePath: params.filePath,
+    rootPath: params.workspaceDir,
+    boundaryLabel: "workspace root",
+    symlinks: params.rejectAliases ? "reject" : "follow-parents-within-root",
+  });
+  if (opened.ok || opened.reason !== "validation" || params.rejectAliases) {
+    return opened;
+  }
+  const workspaceDir = resolveUserPath(params.workspaceDir);
+  if (!/^workspace-[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(path.basename(workspaceDir))) {
+    return opened;
+  }
+  const fileName = path.relative(workspaceDir, path.resolve(params.filePath));
+  const sharedNames: ReadonlySet<string> = new Set([
+    ...WORKSPACE_BOOTSTRAP_FILENAMES,
+    DEFAULT_TOOLS_FILENAME,
+  ]);
+  if (!sharedNames.has(fileName)) {
+    return opened;
+  }
+  // Only the same root document may be shared; personal and renamed aliases stay private.
+  const sharedRoot = syncFs.realpathSync.native(path.resolve(workspaceDir, "..", "workspace"));
+  const sharedFile = path.join(sharedRoot, fileName);
+  if (syncFs.realpathSync.native(params.filePath) !== sharedFile) {
+    return opened;
+  }
+  return await openRootFile({
+    absolutePath: sharedFile,
+    rootPath: sharedRoot,
+    boundaryLabel: "shared workspace root",
+    symlinks: "reject",
+  });
+}
+
 export async function readWorkspaceFileWithGuards(params: {
   filePath: string;
   workspaceDir: string;
@@ -126,12 +171,7 @@ export async function readWorkspaceFileWithGuards(params: {
     // in openRootFile still protects against a swapped file between attempts.
     return await retryAsync(
       async () => {
-        const opened = await openRootFile({
-          absolutePath: params.filePath,
-          rootPath: params.workspaceDir,
-          boundaryLabel: "workspace root",
-          symlinks: params.rejectAliases ? "reject" : "follow-parents-within-root",
-        });
+        const opened = await openWorkspaceBootstrapFile(params);
         if (!opened.ok) {
           // Boundary resolution can report transient IO as "validation", while
           // pinned open failures use "io". Classify the underlying error so
