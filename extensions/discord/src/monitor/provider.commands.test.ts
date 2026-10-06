@@ -27,6 +27,8 @@ function createResolverHarness(
   options: {
     pluginCommandSpecs?: NativeCommandSpec[];
     voiceEnabled?: boolean;
+    accountId?: string;
+    config?: OpenClawConfig;
     nativeCommandSpecs?: NativeCommandSpec[];
     skillCommands?: SkillCommands;
     maxDiscordCommands?: number;
@@ -36,6 +38,7 @@ function createResolverHarness(
   const error = vi.fn();
   const log = vi.fn();
   const runtime: RuntimeEnv = { error, log, exit: vi.fn() };
+  const config = options.config ?? cfg;
   const configuredSkillCommands = options.skillCommands ?? skillCommands;
   const nativeCommandSpecs = options.nativeCommandSpecs ?? [
     { name: "built-in", description: "Built in", acceptsArgs: false },
@@ -75,8 +78,9 @@ function createResolverHarness(
     log,
     resolve: () =>
       resolveDiscordProviderCommandSpecs({
-        cfg,
+        cfg: config,
         runtime,
+        accountId: options.accountId,
         nativeEnabled: true,
         nativeSkillsEnabled: options.nativeSkillsEnabled ?? true,
         voiceEnabled: options.voiceEnabled ?? false,
@@ -94,6 +98,49 @@ describe("resolveDiscordProviderCommandSpecs", () => {
 
   afterEach(() => {
     resetPluginRuntimeStateForTest();
+  });
+
+  it("scopes native skills to the explicitly bound agent for the default account", async () => {
+    const config: OpenClawConfig = {
+      agents: {
+        ownership: "explicit",
+        entries: { main: {}, onevpaw: {} },
+      },
+      bindings: [{ agentId: "main", match: { channel: "discord", accountId: "default" } }],
+    };
+    const harness = createResolverHarness({
+      config,
+      accountId: "default",
+      maxDiscordCommands: 100,
+    });
+
+    await harness.resolve();
+
+    expect(harness.listSkillCommandsForAgents).toHaveBeenCalledWith({
+      cfg: config,
+      agentIds: ["main"],
+    });
+  });
+
+  it("scopes native skills to the agent matching a named account", async () => {
+    const config: OpenClawConfig = {
+      agents: {
+        ownership: "explicit",
+        entries: { main: {}, onevpaw: {} },
+      },
+    };
+    const harness = createResolverHarness({
+      config,
+      accountId: "onevpaw",
+      maxDiscordCommands: 100,
+    });
+
+    await harness.resolve();
+
+    expect(harness.listSkillCommandsForAgents).toHaveBeenCalledWith({
+      cfg: config,
+      agentIds: ["onevpaw"],
+    });
   });
 
   it("discards provisional skill collisions when command overflow removes skills", async () => {

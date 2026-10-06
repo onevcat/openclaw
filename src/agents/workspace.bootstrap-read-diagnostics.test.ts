@@ -11,6 +11,7 @@ import { createLocalRemoteShellScriptRunner } from "./sandbox/remote-fs-bridge.t
 import { createSandboxTestContext } from "./sandbox/test-fixtures.js";
 import { registerAgentWorkspaceAccess, type AgentWorkspaceAccess } from "./workspace-access.js";
 import { MAX_WORKSPACE_BOOTSTRAP_FILE_BYTES } from "./workspace-bootstrap-read.js";
+import { readWorkspaceFileWithGuards } from "./workspace-file-read.js";
 import {
   DEFAULT_AGENTS_FILENAME,
   DEFAULT_MEMORY_FILENAME,
@@ -20,6 +21,103 @@ import {
 } from "./workspace.js";
 
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
+
+describe("shared profile bootstrap boundaries", () => {
+  it.each(["AGENTS.md", "SOUL.md", "TOOLS.md"] as const)(
+    "loads %s from the exact sibling shared workspace",
+    async (name) => {
+      const root = tempDirs.make("bootstrap-shared-");
+      const shared = path.join(root, "workspace");
+      const profile = path.join(root, "workspace-onevpaw");
+      await fs.mkdir(shared);
+      await fs.mkdir(profile);
+      await fs.writeFile(path.join(shared, name), "shared instructions\n");
+      await fs.symlink(path.join("..", "workspace", name), path.join(profile, name));
+
+      const file = await readWorkspaceFileWithGuards({
+        workspaceDir: profile,
+        filePath: path.join(profile, name),
+      });
+
+      expect(file.ok).toBe(true);
+      if (file.ok) {
+        expect(file.content).toBe("shared instructions\n");
+      }
+    },
+  );
+
+  it.each(["outside", "shared-parent-escape", "unnamed-profile"])(
+    "rejects a shared bootstrap boundary violation: %s",
+    async (kind) => {
+      const root = tempDirs.make("bootstrap-shared-escape-");
+      const profile = path.join(
+        root,
+        kind === "unnamed-profile" ? "other-profile" : "workspace-onevpaw",
+      );
+      const shared = path.join(root, "workspace");
+      const outside = path.join(root, "outside");
+      await fs.mkdir(profile);
+      await fs.mkdir(shared);
+      await fs.mkdir(outside);
+      await fs.writeFile(path.join(outside, DEFAULT_AGENTS_FILENAME), "outside instructions\n");
+      if (kind === "shared-parent-escape") {
+        await fs.symlink(
+          path.join("..", "outside", DEFAULT_AGENTS_FILENAME),
+          path.join(shared, DEFAULT_AGENTS_FILENAME),
+        );
+      } else {
+        await fs.writeFile(path.join(shared, DEFAULT_AGENTS_FILENAME), "shared instructions\n");
+      }
+      await fs.symlink(
+        path.join("..", kind === "outside" ? "outside" : "workspace", DEFAULT_AGENTS_FILENAME),
+        path.join(profile, DEFAULT_AGENTS_FILENAME),
+      );
+
+      const [file] = await loadWorkspaceBootstrapFiles(profile, [DEFAULT_AGENTS_FILENAME]);
+
+      expect(file?.missing).toBe(false);
+      expect(file?.content).toContain("[UNREADABLE:");
+    },
+  );
+
+  it.each(["users/owner/private.md", "SOUL.md"])(
+    "rejects a shared root alias to %s",
+    async (target) => {
+      const root = tempDirs.make("bootstrap-shared-private-");
+      const profile = path.join(root, "workspace-onevpaw");
+      const shared = path.join(root, "workspace");
+      await fs.mkdir(profile);
+      await fs.mkdir(path.dirname(path.join(shared, target)), { recursive: true });
+      await fs.writeFile(path.join(shared, target), "private instructions\n");
+      await fs.symlink(path.join(shared, target), path.join(profile, DEFAULT_AGENTS_FILENAME));
+      const [file] = await loadWorkspaceBootstrapFiles(profile, [DEFAULT_AGENTS_FILENAME]);
+      expect(file?.content).toContain("[UNREADABLE:");
+      expect(file?.content).not.toContain("private instructions");
+    },
+  );
+
+  it("keeps personal bootstrap alias rejection when a shared profile root exists", async () => {
+    const root = tempDirs.make("bootstrap-personal-shared-");
+    const profile = path.join(root, "workspace-onevpaw");
+    const shared = path.join(root, "workspace");
+    await fs.mkdir(path.join(profile, "users", "owner"), { recursive: true });
+    await fs.mkdir(shared);
+    await fs.writeFile(path.join(shared, DEFAULT_USER_FILENAME), "shared personal instructions\n");
+    const filePath = path.join(profile, "users", "owner", DEFAULT_USER_FILENAME);
+    await fs.symlink(path.join(shared, DEFAULT_USER_FILENAME), filePath);
+
+    const loaded = await readWorkspaceFileWithGuards({
+      filePath,
+      workspaceDir: profile,
+      rejectAliases: true,
+    });
+
+    expect(loaded.ok).toBe(false);
+    if (!loaded.ok) {
+      expect(loaded.reason).toBe("validation");
+    }
+  });
+});
 
 afterEach(() => {
   setLoggerOverride(null);

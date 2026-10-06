@@ -241,3 +241,29 @@ export function makeLeasedRuntime(
     },
   });
 }
+
+export function makeAgentRuntime(agent: string, command: AcpxAgentCommand) {
+  const { runtime, delegate } = makeRuntime(makeEmptySessionStore(), {
+    agentRegistry: { resolve: () => command, list: () => [agent] },
+  });
+  const ensure = vi.spyOn(delegate, "ensureSession").mockResolvedValue({
+    sessionKey: `agent:${agent}:acp:test`,
+    backend: "acpx",
+    runtimeSessionName: agent,
+  });
+  return { runtime, ensure };
+}
+
+export function readFirstEnsureSessionInput(ensure: {
+  mock: { calls: Array<Array<unknown>> };
+}): Parameters<AcpRuntime["ensureSession"]>[0] {
+  const [call] = ensure.mock.calls;
+  if (!call) {
+    throw new Error("Expected ensureSession to be called");
+  }
+  const [input] = call;
+  if (typeof input !== "object" || input === null) {
+    throw new Error("Expected ensureSession to be called with an input object");
+  }
+  return input as Parameters<AcpRuntime["ensureSession"]>[0];
+}

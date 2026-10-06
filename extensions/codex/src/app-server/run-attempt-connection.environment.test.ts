@@ -135,7 +135,13 @@ describe("Codex local tool environment placement", () => {
       });
       try {
         const expected = placement === "local" ? localToolEnv : undefined;
-        expect(connection.shellEnvironment).toEqual(expected);
+        expect(connection.shellEnvironment).toEqual({
+          ...expected,
+          OPENCLAW_AGENT_ID: "main",
+          OPENCLAW_SESSION_KEY: params.sessionKey,
+          OPENCLAW_SESSION_ID: params.sessionId,
+          OPENCLAW_SHELL: "codex-app-server",
+        });
         expect(connection.shellPathPrepend).toEqual(expected ? ["/fixture/tools"] : undefined);
         expect(connection.appServer.start.env?.PATH).toBe(expected?.PATH);
         expect(connection.disableLoginShell).toBe(false);

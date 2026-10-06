@@ -1,3 +1,5 @@
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/account-id";
+import { resolveDefaultAgentId } from "openclaw/plugin-sdk/agent-scope-runtime";
 import {
   listNativeCommandSpecsForConfig,
   listSkillCommandsForAgents,
@@ -19,12 +21,47 @@ const loadPluginCommandRuntime = createLazyRuntimeModule(
   () => import("openclaw/plugin-sdk/plugin-command-runtime"),
 );
 
+function resolveNativeSkillAgentIdsForAccount(params: {
+  cfg: OpenClawConfig;
+  accountId?: string;
+}): string[] | undefined {
+  const accountId = normalizeLowercaseStringOrEmpty(params.accountId);
+  if (!accountId) {
+    return undefined;
+  }
+  const boundAgentId = params.cfg.bindings?.find((binding) => {
+    const match = binding.match;
+    return (
+      match.channel === "discord" &&
+      normalizeLowercaseStringOrEmpty(match.accountId) === accountId &&
+      match.peer === undefined
+    );
+  })?.agentId;
+  if (boundAgentId) {
+    return [boundAgentId];
+  }
+  if (accountId === normalizeLowercaseStringOrEmpty(DEFAULT_ACCOUNT_ID)) {
+    return params.cfg.agents?.ownership === "explicit"
+      ? undefined
+      : [resolveDefaultAgentId(params.cfg)];
+  }
+  const configuredAgentIds = [
+    ...Object.keys(params.cfg.agents?.entries ?? {}),
+    ...(params.cfg.agents?.list?.map((agent) => agent.id) ?? []),
+  ];
+  const matchingAgentId = configuredAgentIds.find(
+    (agentId) => normalizeLowercaseStringOrEmpty(agentId) === accountId,
+  );
+  return matchingAgentId ? [matchingAgentId] : undefined;
+}
+
 export async function resolveDiscordProviderCommandSpecs(params: {
   cfg: OpenClawConfig;
   runtime: RuntimeEnv;
   nativeEnabled: boolean;
   nativeSkillsEnabled: boolean;
   voiceEnabled: boolean;
+  accountId?: string;
   maxDiscordCommands?: number;
   listSkillCommandsForAgents?: typeof listSkillCommandsForAgents;
   listNativeCommandSpecsForConfig?: typeof listNativeCommandSpecsForConfig;
@@ -36,6 +73,10 @@ export async function resolveDiscordProviderCommandSpecs(params: {
   const listNativeCommandSpecs =
     params.listNativeCommandSpecsForConfig ?? listNativeCommandSpecsForConfig;
   const maxDiscordCommands = params.maxDiscordCommands ?? 100;
+  const nativeSkillAgentIds = resolveNativeSkillAgentIdsForAccount({
+    cfg: params.cfg,
+    accountId: params.accountId,
+  });
   const pluginCommandSpecs = params.nativeEnabled
     ? (await loadPluginCommandRuntime())
         .createPluginCommandRuntime()
@@ -80,7 +121,10 @@ export async function resolveDiscordProviderCommandSpecs(params: {
   const provisionalCollisions: string[] = [];
   let skillCommands =
     params.nativeEnabled && params.nativeSkillsEnabled
-      ? listSkillCommands({ cfg: params.cfg })
+      ? listSkillCommands({
+          cfg: params.cfg,
+          ...(nativeSkillAgentIds ? { agentIds: nativeSkillAgentIds } : {}),
+        })
       : [];
   let commandSpecs: DiscordProviderCommandSpec[] = params.nativeEnabled
     ? mergePluginCommandSpecs(listPrimaryCommandSpecs(skillCommands), (normalizedName) =>

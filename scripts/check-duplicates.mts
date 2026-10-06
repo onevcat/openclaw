@@ -11,6 +11,7 @@ const targets = [
   ".github/codeql/openclaw-boundary/tests",
   "src",
   "extensions",
+  "local-plugins",
   "examples",
   "scripts",
   "packages",

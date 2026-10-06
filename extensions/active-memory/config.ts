@@ -6,6 +6,7 @@ import {
   resolveIntegerOption,
 } from "openclaw/plugin-sdk/number-runtime";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
+import { parseAgentSessionKey } from "openclaw/plugin-sdk/routing";
 import {
   asOptionalRecord,
   normalizeOptionalString,
@@ -73,6 +74,17 @@ function normalizeTranscriptDir(value: unknown): string {
 
 function normalizeIdentifierList(value: unknown): string[] {
   return uniqueStrings(normalizeTrimmedStringList(value).map((entry) => entry.toLowerCase()));
+}
+
+export function normalizeSharedOwnerDirectSessionKeys(value: unknown): string[] {
+  return uniqueStrings(
+    normalizeTrimmedStringList(value)
+      .map((entry) => entry.toLowerCase())
+      .filter((sessionKey) => {
+        const parsed = parseAgentSessionKey(sessionKey);
+        return Boolean(parsed?.agentId && /(?:^|:)(?:direct|dm):[^:]+$/i.test(parsed.rest));
+      }),
+  );
 }
 
 function normalizeConfiguredToolsAllow(value: unknown): string[] | undefined {
@@ -167,6 +179,9 @@ export function normalizePluginConfig(
     allowedChatTypes: allowedChatTypes.length > 0 ? allowedChatTypes : ["direct"],
     allowedChatIds: normalizeIdentifierList(raw.allowedChatIds),
     deniedChatIds: normalizeIdentifierList(raw.deniedChatIds),
+    sharedOwnerDirectSessionKeys: normalizeSharedOwnerDirectSessionKeys(
+      raw.sharedOwnerDirectSessionKeys,
+    ),
     thinking: resolveChoice<ActiveMemoryThinkingLevel>(
       raw.thinking,
       ["off", "minimal", "low", "medium", "high", "xhigh", "adaptive", "max"],

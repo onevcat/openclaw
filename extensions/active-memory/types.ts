@@ -147,6 +147,7 @@ export type ResolvedActiveRecallPluginConfig = {
   allowedChatTypes: ActiveMemoryChatType[];
   allowedChatIds: string[];
   deniedChatIds: string[];
+  sharedOwnerDirectSessionKeys: string[];
   thinking: ActiveMemoryThinkingLevel;
   fastMode?: ActiveMemoryFastMode;
   promptStyle: ActiveMemoryPromptStyle;

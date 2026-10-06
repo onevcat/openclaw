@@ -52,6 +52,23 @@ describe("active-memory manifest config schema", () => {
     expect(normalizePluginConfig({}).mode).toBe("escalate");
   });
 
+  it("keeps only canonical direct-session keys in the shared owner cluster", () => {
+    expect(
+      normalizePluginConfig({
+        sharedOwnerDirectSessionKeys: [
+          "agent:main:discord:default:direct:onevcat",
+          "agent:onevpaw:discord:onevpaw:direct:onevcat",
+          "agent:main:discord:default:direct:onevcat",
+          "agent:main:discord:default:group:onevcat",
+          "not-a-session-key",
+        ],
+      }).sharedOwnerDirectSessionKeys,
+    ).toEqual([
+      "agent:main:discord:default:direct:onevcat",
+      "agent:onevpaw:discord:onevpaw:direct:onevcat",
+    ]);
+  });
+
   it.each([
     // Mode-only payloads must stay valid for partial configuration updates.
     ["escalate mode", { mode: "escalate" }, true],
