@@ -45,10 +45,9 @@ function resolveNativeSkillAgentIdsForAccount(params: {
       ? undefined
       : [resolveDefaultAgentId(params.cfg)];
   }
-  const configuredAgentIds = [
-    ...Object.keys(params.cfg.agents?.entries ?? {}),
-    ...(params.cfg.agents?.list?.map((agent) => agent.id) ?? []),
-  ];
+  // Target config normalizes fleet entries into `agents.entries`; it no longer
+  // exposes the legacy `agents.list` compatibility shape.
+  const configuredAgentIds = Object.keys(params.cfg.agents?.entries ?? {});
   const matchingAgentId = configuredAgentIds.find(
     (agentId) => normalizeLowercaseStringOrEmpty(agentId) === accountId,
   );
