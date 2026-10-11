@@ -155,11 +155,18 @@ describe("resolveDiscordProviderCommandSpecs", () => {
       },
       bindings: [{ agentId: "main", match: { channel: "discord", accountId: "default" } }],
     };
-    const harness = createResolverHarness({ config, accountId: "default", maxDiscordCommands: 100 });
+    const harness = createResolverHarness({
+      config,
+      accountId: "default",
+      maxDiscordCommands: 100,
+    });
 
     await harness.resolve();
 
-    expect(harness.listSkillCommandsForAgents).toHaveBeenCalledWith({ cfg: config, agentIds: ["main"] });
+    expect(harness.listSkillCommandsForAgents).toHaveBeenCalledWith({
+      cfg: config,
+      agentIds: ["main"],
+    });
   });
 
   it("scopes native skills to the agent matching a named account", async () => {
@@ -169,11 +176,18 @@ describe("resolveDiscordProviderCommandSpecs", () => {
         entries: { main: {}, onevpaw: {} },
       },
     };
-    const harness = createResolverHarness({ config, accountId: "onevpaw", maxDiscordCommands: 100 });
+    const harness = createResolverHarness({
+      config,
+      accountId: "onevpaw",
+      maxDiscordCommands: 100,
+    });
 
     await harness.resolve();
 
-    expect(harness.listSkillCommandsForAgents).toHaveBeenCalledWith({ cfg: config, agentIds: ["onevpaw"] });
+    expect(harness.listSkillCommandsForAgents).toHaveBeenCalledWith({
+      cfg: config,
+      agentIds: ["onevpaw"],
+    });
   });
 
   it("reports only retained collisions after command overflow removes skills", async () => {
