@@ -162,7 +162,14 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       ...ensureInput,
       agent: "claude",
       model: "us.anthropic.claude-opus-4-6-v1",
-      sessionOptions: { model: "us.anthropic.claude-opus-4-6-v1" },
+      sessionOptions: {
+        model: "us.anthropic.claude-opus-4-6-v1",
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "codex",
+          OPENCLAW_SESSION_KEY: sessionKey,
+        },
+      },
     });
   });
 
@@ -330,10 +337,25 @@ describe("AcpxRuntime fresh reset wrapper", () => {
     expect(ensure).toHaveBeenCalledTimes(2);
     expect(ensure.mock.calls[0]?.[0]).toMatchObject({
       model: "openrouter/owl-alpha",
-      sessionOptions: { model: "openrouter/owl-alpha" },
+      sessionOptions: {
+        model: "openrouter/owl-alpha",
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "codex",
+          OPENCLAW_SESSION_KEY: sessionKey,
+        },
+      },
     });
-    expect(ensure.mock.calls[1]?.[0]).toMatchObject({ model: undefined });
-    expect(ensure.mock.calls[1]?.[0]).not.toHaveProperty("sessionOptions");
+    expect(ensure.mock.calls[1]?.[0]).toMatchObject({
+      model: undefined,
+      sessionOptions: {
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "codex",
+          OPENCLAW_SESSION_KEY: sessionKey,
+        },
+      },
+    });
   });
 
   it("persists explicit thinking off over a Codex model suffix", async () => {
@@ -368,7 +390,16 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       thinking: "max",
       thinkingExplicit: false,
     });
-    expect(ensure.mock.calls[0]?.[0]).toEqual(ensureInput);
+    expect(ensure.mock.calls[0]?.[0]).toEqual({
+      ...ensureInput,
+      sessionOptions: {
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "codex",
+          OPENCLAW_SESSION_KEY: sessionKey,
+        },
+      },
+    });
     expect(handle.appliedThinking).toEqual({ kind: "dropped" });
   });
 
@@ -379,7 +410,17 @@ describe("AcpxRuntime fresh reset wrapper", () => {
       model: "google/gemini-3.1-flash-lite",
       thinking: "low",
     });
-    expect(ensure.mock.calls[0]?.[0]).toEqual({ ...ensureInput, thinking: "low" });
+    expect(ensure.mock.calls[0]?.[0]).toEqual({
+      ...ensureInput,
+      thinking: "low",
+      sessionOptions: {
+        env: {
+          OPENCLAW_SHELL: "acpx-runtime",
+          OPENCLAW_AGENT_ID: "codex",
+          OPENCLAW_SESSION_KEY: sessionKey,
+        },
+      },
+    });
     expect(handle.appliedModel).toEqual({ kind: "dropped" });
   });
 
