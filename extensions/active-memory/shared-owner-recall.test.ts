@@ -22,6 +22,30 @@ function hit(snippet: string, score = 0.8): MemorySearchResult {
 }
 
 describe("shared owner direct recall", () => {
+  it("never shares excerpts into or out of incognito sessions", () => {
+    const incognitoMainKey = "agent:main:dashboard:incognito-private";
+    const incognitoPawKey = "agent:onevpaw:dashboard:incognito-private";
+    const candidates = [
+      { agentId: "onevpaw", sessionKeys: [pawSessionKey], hit: hit("paw handoff", 0.9) },
+      { agentId: "onevpaw", sessionKeys: [incognitoPawKey], hit: hit("incognito note", 0.99) },
+    ];
+
+    expect(
+      selectSharedOwnerSessionHits({
+        currentSessionKey: incognitoMainKey,
+        sharedOwnerDirectSessionKeys: [incognitoMainKey, pawSessionKey],
+        candidates,
+      }),
+    ).toEqual([]);
+    expect(
+      selectSharedOwnerSessionHits({
+        currentSessionKey: mainSessionKey,
+        sharedOwnerDirectSessionKeys: [mainSessionKey, pawSessionKey, incognitoPawKey],
+        candidates,
+      }),
+    ).toEqual([{ agentId: "onevpaw", hit: hit("paw handoff", 0.9) }]);
+  });
+
   it("returns only configured sibling direct-message hits and excludes the live session", () => {
     const selected = selectSharedOwnerSessionHits({
       currentSessionKey: mainSessionKey,

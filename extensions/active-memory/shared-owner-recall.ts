@@ -1,7 +1,7 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import type { MemorySearchResult } from "openclaw/plugin-sdk/memory-core-host-engine-storage";
 import { getActiveMemorySearchManager } from "openclaw/plugin-sdk/memory-host-search";
-import { parseAgentSessionKey } from "openclaw/plugin-sdk/routing";
+import { isIncognitoSessionKey, parseAgentSessionKey } from "openclaw/plugin-sdk/routing";
 import { resolveStorePath } from "openclaw/plugin-sdk/session-store-paths";
 import { listSessionEntries, type SessionEntry } from "openclaw/plugin-sdk/session-store-runtime";
 import {
@@ -27,13 +27,20 @@ function normalizeSessionKey(value: string): string {
   return value.trim().toLowerCase();
 }
 
+// Incognito sessions never share owner transcripts, even when an allowlist names them.
+function normalizeSharedOwnerSessionKeys(sessionKeys: readonly string[]): string[] {
+  return sessionKeys
+    .map(normalizeSessionKey)
+    .filter((sessionKey) => sessionKey && !isIncognitoSessionKey(sessionKey));
+}
+
 function selectSharedOwnerSessionHits(params: {
   currentSessionKey?: string;
   sharedOwnerDirectSessionKeys: readonly string[];
   candidates: readonly SharedOwnerSessionCandidate[];
 }): SharedOwnerSessionHit[] {
   const currentSessionKey = normalizeSessionKey(params.currentSessionKey ?? "");
-  const allowed = new Set(params.sharedOwnerDirectSessionKeys.map(normalizeSessionKey));
+  const allowed = new Set(normalizeSharedOwnerSessionKeys(params.sharedOwnerDirectSessionKeys));
   if (!currentSessionKey || !allowed.has(currentSessionKey)) {
     return [];
   }
@@ -139,7 +146,9 @@ async function resolveSharedOwnerSessionContext(params: {
   sharedOwnerDirectSessionKeys: readonly string[];
   signal?: AbortSignal;
 }): Promise<string | undefined> {
-  const configuredSessionKeys = params.sharedOwnerDirectSessionKeys.map(normalizeSessionKey);
+  const configuredSessionKeys = normalizeSharedOwnerSessionKeys(
+    params.sharedOwnerDirectSessionKeys,
+  );
   const currentSessionKey = normalizeSessionKey(params.currentSessionKey ?? "");
   if (!currentSessionKey || !configuredSessionKeys.includes(currentSessionKey)) {
     return undefined;
