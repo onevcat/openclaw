@@ -444,11 +444,11 @@ describe("prepareCodexAttemptConnection", () => {
           placement === "ordinary-unix-server" ? "unix" : "websocket",
         );
         expect(connection.shellEnvironment).toEqual({
-        OPENCLAW_SHELL: "codex-app-server",
-        OPENCLAW_AGENT_ID: "main",
-        OPENCLAW_SESSION_KEY: params.sessionKey,
-        OPENCLAW_SESSION_ID: params.sessionId,
-      });
+          OPENCLAW_SHELL: "codex-app-server",
+          OPENCLAW_AGENT_ID: "main",
+          OPENCLAW_SESSION_KEY: params.sessionKey,
+          OPENCLAW_SESSION_ID: params.sessionId,
+        });
         expect(connection.appServer.start.env ?? {}).not.toHaveProperty("OPENCLAW_STATE_DIR");
         expect(connection.disableLoginShell).toBe(false);
         return;
@@ -522,10 +522,10 @@ describe("prepareCodexAttemptConnection", () => {
 
     expect(connection.shellEnvironment).toEqual({
       PREVIEW_STORE_TOKEN: "",
-        OPENCLAW_SHELL: "codex-app-server",
-        OPENCLAW_AGENT_ID: "main",
-        OPENCLAW_SESSION_KEY: params.sessionKey,
-        OPENCLAW_SESSION_ID: params.sessionId,
+      OPENCLAW_SHELL: "codex-app-server",
+      OPENCLAW_AGENT_ID: "main",
+      OPENCLAW_SESSION_KEY: params.sessionKey,
+      OPENCLAW_SESSION_ID: params.sessionId,
     });
     expect(connection.disableLoginShell).toBe(true);
   });

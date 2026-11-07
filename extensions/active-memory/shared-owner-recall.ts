@@ -3,7 +3,10 @@ import type { MemorySearchResult } from "openclaw/plugin-sdk/memory-core-host-en
 import { getActiveMemorySearchManager } from "openclaw/plugin-sdk/memory-host-search";
 import { isIncognitoSessionKey, parseAgentSessionKey } from "openclaw/plugin-sdk/routing";
 import { resolveStorePath } from "openclaw/plugin-sdk/session-store-paths";
-import { listSessionEntries, type SessionEntry } from "openclaw/plugin-sdk/session-store-runtime";
+import {
+  listSessionEntriesAsync,
+  type SessionEntry,
+} from "openclaw/plugin-sdk/session-store-runtime";
 import {
   extractTranscriptIdentityFromSessionsMemoryHit,
   parseSessionTranscriptMemoryHitKey,
@@ -173,14 +176,15 @@ async function resolveSharedOwnerSessionContext(params: {
           sources: ["sessions"],
           signal: params.signal,
         });
-        // This shipped SDK read-only contract avoids create/register/migrate while
-        // preserving exact owner-session bindings across the stable-tag upgrade.
+        // The asynchronous read-only SDK keeps database work off the Gateway thread
+        // while preserving exact persisted owner-session bindings.
         const store = Object.fromEntries(
-          listSessionEntries({
-            agentId: sourceAgentId,
-            storePath: resolveStorePath(params.cfg.session?.store, { agentId: sourceAgentId }),
-            readOnly: true,
-          }).map(({ sessionKey, entry }) => [sessionKey, entry]),
+          (
+            await listSessionEntriesAsync({
+              agentId: sourceAgentId,
+              storePath: resolveStorePath(params.cfg.session?.store, { agentId: sourceAgentId }),
+            })
+          ).map(({ sessionKey, entry }) => [sessionKey, entry]),
         );
         return hits.map((hit) => ({
           agentId: sourceAgentId,
