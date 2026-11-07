@@ -5,9 +5,11 @@ import { resolveSharedOwnerSessionContext } from "./shared-owner-recall.js";
 const ownerKey = "agent:main:discord:default:direct:owner";
 const siblingKey = "agent:onevpaw:discord:onevpaw:direct:owner";
 const io = vi.hoisted(() => ({ search: vi.fn(), list: vi.fn() }));
+// mock-isolation: Supply deterministic search hits without initializing the host memory manager.
 vi.mock("openclaw/plugin-sdk/memory-host-search", () => ({
   getActiveMemorySearchManager: async () => ({ manager: { search: io.search } }),
 }));
+// mock-isolation: Exercise persisted binding reads without opening any real agent SQLite store.
 vi.mock("openclaw/plugin-sdk/session-store-runtime", () => ({
   listSessionEntriesAsync: (...args: unknown[]) => io.list(...args),
 }));
