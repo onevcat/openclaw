@@ -1,9 +1,6 @@
 /** Tests OpenAI-compatible image provider request building and response handling. */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  createOpenAiCompatibleImageGenerationProvider,
-  type OpenAiCompatibleImageProviderOptions,
-} from "./openai-compatible-image-provider.js";
+import { createOpenAiCompatibleImageGenerationProvider } from "./openai-compatible-image-provider.js";
 import type { ImageGenerationProvider, ImageGenerationRequest } from "./types.js";
 
 const {
@@ -91,7 +88,9 @@ function generate(provider: ImageGenerationProvider, overrides: Partial<ImageGen
   });
 }
 
-function createProvider(overrides: Partial<OpenAiCompatibleImageProviderOptions> = {}) {
+function createProvider(
+  overrides: Partial<Parameters<typeof createOpenAiCompatibleImageGenerationProvider>[0]> = {},
+) {
   return createOpenAiCompatibleImageGenerationProvider({
     id: "sample",
     label: "Sample",

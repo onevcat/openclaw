@@ -45,7 +45,7 @@ export type OpenAiCompatibleImageProviderRequestBody =
   | { kind: "json"; body: Record<string, unknown> }
   | { kind: "multipart"; form: FormData };
 
-export type OpenAiCompatibleImageProviderOptions = {
+type OpenAiCompatibleImageProviderOptions = {
   id: string;
   label: string;
   defaultModel: string;
